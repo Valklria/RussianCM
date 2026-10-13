@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <GenerateProgramFile>false</GenerateProgramFile>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="NUnit" Version="4.4.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="5.2.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Compile the real server boundary and the same tests as Content.IntegrationTests, without engine builds. -->
+    <Compile Include="../../Content.CMU/Server/AdminAI/IAIInferenceClient.cs" Link="Server/IAIInferenceClient.cs" />
+    <Compile Include="../../Content.CMU/Server/AdminAI/AIInferenceOptions.cs" Link="Server/AIInferenceOptions.cs" />
+    <Compile Include="../../Content.CMU/Server/AdminAI/AIInferenceProtocol.cs" Link="Server/AIInferenceProtocol.cs" />
+    <Compile Include="../../Content.CMU/Server/AdminAI/UnavailableAIInferenceClient.cs" Link="Server/UnavailableAIInferenceClient.cs" />
+    <Compile Include="../../Content.IntegrationTests/_CMU14/AdminAI/AIInferenceTests.cs" Link="Tests/AIInferenceTests.cs" />
+    <Compile Include="../AdminAI.Spike/UdsSpikeClient.cs" Link="Spike/UdsSpikeClient.cs" />
+    <Compile Include="../AdminAI.Spike/MockWorker.cs" Link="Spike/MockWorker.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(AdminAIEngineAssemblyDirectory)' != ''">
+    <!-- Optional: compile/test CVar bindings against existing engine binaries without rebuilding the engine. -->
+    <Reference Include="Robust.Shared">
+      <HintPath>$(AdminAIEngineAssemblyDirectory)/Robust.Shared.dll</HintPath>
+    </Reference>
+    <Compile Include="../../Content.CMU/Server/AdminAI/AdminAICVars.cs" Link="Server/AdminAICVars.cs" />
+    <Compile Include="../../Content.IntegrationTests/_CMU14/AdminAI/AdminAIConfigurationTests.cs" Link="Tests/AdminAIConfigurationTests.cs" />
+  </ItemGroup>
+</Project>
