@@ -720,9 +720,10 @@ namespace Content.Server.Administration.Systems
 
             _afkManager.PlayerDidAction(senderSession);
 
-            // CMU14: record only accepted ahelp input. The observer never generates or sends a reply here.
-            RaiseLocalEvent(new AdminAHelpAcceptedEvent(message.UserId.UserId, _gameTicker.RoundId,
-                senderAHelpAdmin, message.Text, message.AdminOnly));
+            // CMU14: observers receive only accepted input; ordinary ahelp delivery remains independent.
+            var accepted = new AdminAHelpAcceptedEvent(message.UserId.UserId, _gameTicker.RoundId,
+                senderAHelpAdmin, message.Text, message.AdminOnly);
+            RaiseLocalEvent(accepted);
 
             // If it's not an admin / admin chooses to keep the sound and message is not an admin only message, then play it.
             var playSound = (!senderAHelpAdmin || message.PlaySound) && !message.AdminOnly;
@@ -773,6 +774,9 @@ namespace Content.Server.Administration.Systems
                 );
                 _messageQueues[message.UserId].Enqueue(GenerateAHelpMessage(messageParams));
             }
+
+            // Automatic FAQ runs only after ordinary delivery/relay preparation, never instead of it.
+            RaiseLocalEvent(new AdminAHelpDeliveredEvent(accepted));
 
             if (admins.Count != 0 || sendsWebhook)
                 return;

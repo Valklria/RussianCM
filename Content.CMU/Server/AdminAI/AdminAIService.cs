@@ -129,7 +129,7 @@ public sealed class AdminAIService : IAdminAIService
         var token = _lifetime.Token;
         _poll = Task.Run(() => PollLoad(queue, governorOptions, groups, token));
         _healthPoll = Task.Run(() => PollHealth(queue, inference, token));
-        _log.Info("AI infrastructure enabled; no automatic replies or generation triggers are registered.");
+        _log.Info("AI infrastructure enabled; model output is private, automatic public FAQ requires separate opt-in.");
     }
 
     private async Task PollLoad(AIRequestQueue queue, AIGovernorOptions options, string[] groups, CancellationToken token)

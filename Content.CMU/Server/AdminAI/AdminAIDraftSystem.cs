@@ -37,6 +37,11 @@ public sealed class AdminAHelpAcceptedEvent(Guid channel, int round, bool fromAd
     public readonly string Text = text;
 }
 
+public sealed class AdminAHelpDeliveredEvent(AdminAHelpAcceptedEvent message) : EntityEventArgs
+{
+    public readonly AdminAHelpAcceptedEvent Message = message;
+}
+
 /// <summary>Manual private draft only. No logs/notes, player replies, commands, webhook or disciplinary APIs.</summary>
 public sealed class AdminAIDraftSystem : EntitySystem
 {
@@ -146,10 +151,13 @@ public sealed class AdminAIDraftSystem : EntitySystem
         if (!infrastructure.Enabled) { Send(session, view, AdminAIDraftStatus.Disabled); return; }
         if (infrastructure.Health != AIWorkerHealth.Ready) { Send(session, view, AdminAIDraftStatus.Unavailable); return; }
         if (infrastructure.State == AIResourceState.Paused) { Send(session, view, AdminAIDraftStatus.Paused); return; }
-        var maxChars = _config.GetCVar(infrastructure.State == AIResourceState.Degraded ? AdminAICVars.DegradedInputChars : AdminAICVars.MaxInputChars);
-        var ticket = _store.Begin(view, _timing.RealTime, Math.Min(1400, maxChars - 750));
+        var outputTokens = _config.GetCVar(AdminAICVars.DraftOutputTokens);
+        if (outputTokens is < 32 or > 256) { Send(session, view, AdminAIDraftStatus.Disabled); return; }
+        var maxChars = Math.Min(2300, _config.GetCVar(infrastructure.State == AIResourceState.Degraded ? AdminAICVars.DegradedInputChars : AdminAICVars.MaxInputChars));
+        var ticket = _store.Begin(view, _timing.RealTime, Math.Min(800, maxChars - 650));
         if (ticket == null) { Send(session, view, view.Pending == null ? AdminAIDraftStatus.RateLimited : AdminAIDraftStatus.Working); return; }
         var knowledge = _knowledge;
+        var publicMap = AIResponsePolicy.IsMapQuestion(ticket.Question) ? _round.PublicMapDescription : null;
         Send(session, view, AdminAIDraftStatus.Working);
         _audit.Info($"AI requested actor={session.UserId} case={ticket.CaseId} round={ticket.Round} request={ticket.Id} mode=DraftOnly");
         _ = Task.Run(async () =>
@@ -157,9 +165,19 @@ public sealed class AdminAIDraftSystem : EntitySystem
             var sources = Array.Empty<AIRulePassage>(); var result = new AIInferenceResult(ticket.Id, AIInferenceStatus.InvalidRequest);
             try
             {
-                sources = knowledge.Search(ticket.Conversation, maxChars - ticket.Conversation.Length - 900);
-                var input = AIDraftPrompt.Build(ticket, sources, maxChars);
-                if (input.Length > 0) result = await _inference.EnqueueAsync(new(ticket.Id, input), AIRequestClass.LightManual, ticket.Token).ConfigureAwait(false);
+                sources = AIResponsePolicy.FindAnswer(ticket.Question, knowledge);
+                if (publicMap != null || sources.Length > 0)
+                {
+                    // Fast public facts retain the same private view/authentication/revision checks.
+                    result = new(ticket.Id, AIInferenceStatus.Success, publicMap ?? AIResponsePolicy.Excerpt(sources));
+                }
+                else
+                {
+                    sources = knowledge.Search(ticket.Question.Length > 0 ? ticket.Question : ticket.Conversation,
+                        maxChars - ticket.Conversation.Length - 650);
+                    var input = AIDraftPrompt.Build(ticket, sources, maxChars);
+                    if (input.Length > 0) result = await _inference.EnqueueAsync(new(ticket.Id, input, outputTokens), AIRequestClass.LightManual, ticket.Token).ConfigureAwait(false);
+                }
             }
             catch (Exception) { result = new(ticket.Id, AIInferenceStatus.Unavailable); }
             var completed = result; var selected = sources;
@@ -187,7 +205,7 @@ public sealed class AdminAIDraftSystem : EntitySystem
         if (_knowledge != null || _knowledgeTask is { IsCompleted: false }) return;
         var generation = _knowledgeGeneration;
         var documents = _prototypes.EnumeratePrototypes<GuideEntryPrototype>().Where(entry => AIRuleKnowledgeBase.IsAllowedPath(entry.Text.ToString()))
-            .OrderBy(entry => entry.ID, StringComparer.Ordinal).Take(64).Select(entry => (entry.ID, entry.Name, Path: entry.Text.ToString())).ToArray();
+            .OrderBy(entry => entry.ID, StringComparer.Ordinal).Take(AIRuleKnowledgeBase.MaxDocuments).Select(entry => (entry.ID, entry.Name, Path: entry.Text.ToString())).ToArray();
         _knowledgeTask = Task.Run(() =>
         {
             var loaded = new List<AIRuleDocument>();
@@ -204,8 +222,20 @@ public sealed class AdminAIDraftSystem : EntitySystem
             }
             AIRuleKnowledgeBase knowledge;
             try { knowledge = new(loaded); } catch (Exception) { knowledge = new(Array.Empty<AIRuleDocument>()); }
-            _tasks.RunOnMainThread(() => { if (!_shuttingDown && generation == _knowledgeGeneration) _knowledge = knowledge; });
+            _tasks.RunOnMainThread(() =>
+            {
+                if (_shuttingDown || generation != _knowledgeGeneration) return;
+                _knowledge = knowledge;
+                _audit.Info($"AI public knowledge ready: documents={knowledge.Documents} passages={knowledge.Count}");
+            });
         });
+    }
+
+    internal AIRuleKnowledgeBase? GetKnowledge()
+    {
+        if (Volatile.Read(ref _dirty)) Reconfigure();
+        if (!Enabled || _shuttingDown) return null;
+        EnsureKnowledge(); return _knowledge;
     }
 
     private void Send(ICommonSession session, AIDraftSessionStore.View view, AdminAIDraftStatus? status = null)
@@ -255,6 +285,7 @@ public sealed class AdminAIDraftSystem : EntitySystem
         if (Volatile.Read(ref _dirty)) Reconfigure();
         if (_timing.RealTime < _nextState) return;
         _nextState = _timing.RealTime + TimeSpan.FromSeconds(5);
+        if (Enabled) EnsureKnowledge();
         var owners = _store.Owners.ToArray(); _store.Sweep(_timing.RealTime);
         foreach (var owner in owners)
         {

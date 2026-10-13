@@ -2,7 +2,7 @@ using Robust.Shared.Configuration;
 
 namespace Content.Server.CMU14.AdminAI;
 
-/// <summary>Server infrastructure configuration. No automatic ahelp triggers are connected.</summary>
+/// <summary>Server-only local assistant configuration; automatic replies are separately opt-in.</summary>
 [CVarDefs]
 public static class AdminAICVars
 {
@@ -25,6 +25,8 @@ public static class AdminAICVars
         CVarDef.Create("cmu.admin_ai.max_output_chars", 4096, CVar.SERVERONLY | CVar.ARCHIVE);
 
     private const CVar Flags = CVar.SERVERONLY | CVar.ARCHIVE;
+    public static readonly CVarDef<bool> SafeFAQ = CVarDef.Create("cmu.admin_ai.safe_faq", false, Flags);
+    public static readonly CVarDef<int> DraftOutputTokens = CVarDef.Create("cmu.admin_ai.draft_output_tokens", 128, Flags);
     public static readonly CVarDef<int> MaxConcurrentRequests = CVarDef.Create("cmu.admin_ai.max_concurrent_requests", 1, Flags);
     public static readonly CVarDef<int> QueueCapacity = CVarDef.Create("cmu.admin_ai.queue_capacity", 8, Flags);
     public static readonly CVarDef<int> QueueTtlSeconds = CVarDef.Create("cmu.admin_ai.queue_ttl_seconds", 30, Flags);
@@ -51,11 +53,11 @@ public static class AdminAICVars
     public static readonly CVarDef<int> ContextMessageChars = CVarDef.Create("cmu.admin_ai.context_message_chars", 512, Flags);
     public static readonly CVarDef<int> DraftCooldownSeconds = CVarDef.Create("cmu.admin_ai.draft_cooldown_seconds", 5, Flags);
 
-    public static readonly CVarDef<bool>[] RuntimeBools = { Enabled, GovernorEnabled };
+    public static readonly CVarDef<bool>[] RuntimeBools = { Enabled, GovernorEnabled, SafeFAQ };
     public static readonly CVarDef<int>[] RuntimeInts = { TimeoutSeconds, MaxInputChars, MaxOutputTokens, MaxOutputChars,
         MaxConcurrentRequests, QueueCapacity, QueueTtlSeconds, DegradedInputChars, DegradedOutputTokens,
         PollSeconds, RecoverySeconds, MaxSampleAgeSeconds, ContextTtlSeconds, DraftTtlSeconds, MaxConversations,
-        MaxViews, ContextMessages, ContextMessageChars, DraftCooldownSeconds };
+        MaxViews, ContextMessages, ContextMessageChars, DraftCooldownSeconds, DraftOutputTokens };
     public static readonly CVarDef<float>[] RuntimeFloats = { CpuDegraded, CpuPaused, MemoryDegraded, MemoryPaused,
         IoDegraded, IoPaused, SimulationDegraded, SimulationPaused };
     public static readonly CVarDef<string>[] RuntimeStrings = { SocketPath, CgroupPaths };

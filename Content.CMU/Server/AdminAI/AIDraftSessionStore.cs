@@ -16,7 +16,10 @@ public sealed record AIDraftContextOptions(int MaxConversations = 128, int MaxVi
 }
 
 public sealed record AIDraftTicket(Guid Id, Guid Owner, Guid Channel, Guid CaseId, Guid ViewId,
-    int Round, long Revision, long Epoch, string Conversation, CancellationToken Token);
+    int Round, long Revision, long Epoch, string Conversation, CancellationToken Token)
+{
+    public string Question { get; init; } = "";
+}
 
 /// <summary>Game-thread-owned, bounded current-round public ahelp context and one private view per admin.</summary>
 public sealed class AIDraftSessionStore(AIDraftContextOptions options)
@@ -97,7 +100,8 @@ public sealed class AIDraftSessionStore(AIDraftContextOptions options)
         if (text.Length == 0) return null;
         view.Cancellation = new();
         view.Pending = new(Guid.NewGuid(), view.Owner, view.Channel, view.CaseId, view.Id, view.Round,
-            conversation.Revision, _epoch, text.ToString(), view.Cancellation.Token);
+            conversation.Revision, _epoch, text.ToString(), view.Cancellation.Token)
+        { Question = conversation.Messages.LastOrDefault(message => !message.FromAdmin)?.Text ?? "" };
         return view.Pending;
     }
 
