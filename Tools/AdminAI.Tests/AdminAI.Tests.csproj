@@ -21,7 +21,7 @@
     <Compile Include="../../Content.CMU/Server/AdminAI/AIInferenceProtocol.cs" Link="Server/AIInferenceProtocol.cs" />
     <Compile Include="../../Content.CMU/Server/AdminAI/UnavailableAIInferenceClient.cs" Link="Server/UnavailableAIInferenceClient.cs" />
     <Compile Include="../../Content.IntegrationTests/_CMU14/AdminAI/AIInferenceTests.cs" Link="Tests/AIInferenceTests.cs" />
-    <Compile Include="../AdminAI.Spike/UdsSpikeClient.cs" Link="Spike/UdsSpikeClient.cs" />
+    <Compile Include="../../Content.CMU/Server/AdminAI/UdsAIInferenceClient.cs" Link="Server/UdsAIInferenceClient.cs" />
     <Compile Include="../AdminAI.Spike/MockWorker.cs" Link="Spike/MockWorker.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(AdminAIEngineAssemblyDirectory)' != ''">

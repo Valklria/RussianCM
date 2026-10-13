@@ -34,7 +34,7 @@ try
         var workerTask = fixture?.RunAsync(lifetime.Token);
         try
         {
-            using var client = new UdsSpikeClient(path, new AIInferenceOptions(Enabled: true, TimeoutSeconds: 5));
+            using var client = new UdsAIInferenceClient(path, new AIInferenceOptions(Enabled: true, TimeoutSeconds: 5));
             var health = await client.CheckHealthAsync(lifetime.Token);
             Console.WriteLine($"UDS health: {health}");
             if (health != AIWorkerHealth.Ready)

@@ -2,7 +2,7 @@ using Robust.Shared.Configuration;
 
 namespace Content.Server.CMU14.AdminAI;
 
-/// <summary>Stage A configuration only. No service or ahelp handler consumes these yet.</summary>
+/// <summary>Stage A configuration. Only a manual health probe consumes these; ahelp is not connected.</summary>
 [CVarDefs]
 public static class AdminAICVars
 {

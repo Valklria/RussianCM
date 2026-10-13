@@ -10,10 +10,18 @@ internal sealed class MockWorker : IDisposable
 {
     private readonly Socket _listener;
     private readonly string _path;
+    private readonly MockWorkerFault _fault;
+    private readonly TaskCompletionSource<bool> _requestReceived = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<bool> _releaseStall = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    public MockWorker(string path)
+    public Task RequestReceived => _requestReceived.Task;
+    public int RequestCount { get; private set; }
+    public void ReleaseStall() => _releaseStall.TrySetResult(true);
+
+    public MockWorker(string path, MockWorkerFault fault = MockWorkerFault.None)
     {
         _path = path;
+        _fault = fault;
         _listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         try
         {
@@ -36,11 +44,17 @@ internal sealed class MockWorker : IDisposable
             await using var stream = new NetworkStream(connection, ownsSocket: false);
             using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(token);
             requestTimeout.CancelAfter(TimeSpan.FromSeconds(5));
-            await ReplyAsync(stream, requestTimeout.Token);
+            try
+            {
+                await ReplyAsync(stream, requestTimeout.Token);
+            }
+            catch (IOException) { /* A cancelled/disconnected test client must not kill the mock listener. */ }
+            catch (SocketException) { }
+            catch (OperationCanceledException) when (!token.IsCancellationRequested) { }
         }
     }
 
-    private static async Task ReplyAsync(NetworkStream stream, CancellationToken token)
+    private async Task ReplyAsync(NetworkStream stream, CancellationToken token)
     {
         var header = new List<byte>();
         var single = new byte[1];
@@ -68,6 +82,7 @@ internal sealed class MockWorker : IDisposable
         }
         var input = new byte[contentLength];
         await stream.ReadExactlyAsync(input, token);
+        RequestCount++;
 
         byte[] body;
         var status = "200 OK";
@@ -78,6 +93,29 @@ internal sealed class MockWorker : IDisposable
             using var request = JsonDocument.Parse(input, new JsonDocumentOptions { MaxDepth = 16 });
             if (request.RootElement.GetProperty("stream").GetBoolean())
                 throw new IOException("Streaming is not supported by the mock.");
+            _requestReceived.TrySetResult(true);
+            if (_fault == MockWorkerFault.Disconnect)
+                return;
+            if (_fault == MockWorkerFault.StallHeaders)
+                await _releaseStall.Task.WaitAsync(token);
+            if (_fault is MockWorkerFault.StallBody or MockWorkerFault.TruncatedBody)
+            {
+                await stream.WriteAsync("HTTP/1.1 200 OK\r\nContent-Length: 100\r\nConnection: close\r\n\r\n{"u8.ToArray(), token);
+                if (_fault == MockWorkerFault.StallBody)
+                    await _releaseStall.Task.WaitAsync(token);
+                return;
+            }
+            if (_fault == MockWorkerFault.Redirect)
+            {
+                await stream.WriteAsync("HTTP/1.1 302 Found\r\nLocation: http://external.invalid/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"u8.ToArray(), token);
+                return;
+            }
+            if (_fault == MockWorkerFault.OversizedBodyWithoutLength)
+            {
+                await stream.WriteAsync("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n"u8.ToArray(), token);
+                await stream.WriteAsync(new byte[Content.Server.CMU14.AdminAI.AIInferenceOptions.MaxResponseBytes + 1], token);
+                return;
+            }
             body = JsonSerializer.SerializeToUtf8Bytes(new
             {
                 choices = new[]
@@ -86,6 +124,10 @@ internal sealed class MockWorker : IDisposable
                         content = "[MOCK WORKER: NO MODEL] HTTP/JSON over UDS received." } },
                 },
             });
+            if (_fault == MockWorkerFault.MalformedJson)
+                body = "{"u8.ToArray();
+            else if (_fault == MockWorkerFault.EmptyBody)
+                body = [];
         }
         else
         {
@@ -105,4 +147,17 @@ internal sealed class MockWorker : IDisposable
         if (File.Exists(_path))
             File.Delete(_path);
     }
+}
+
+public enum MockWorkerFault
+{
+    None,
+    StallHeaders,
+    StallBody,
+    Disconnect,
+    TruncatedBody,
+    MalformedJson,
+    EmptyBody,
+    OversizedBodyWithoutLength,
+    Redirect,
 }

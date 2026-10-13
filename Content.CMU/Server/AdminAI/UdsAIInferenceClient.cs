@@ -1,17 +1,23 @@
+using System;
+using System.IO;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
-using Content.Server.CMU14.AdminAI;
 
-namespace Content.Tools.AdminAI.Spike;
+namespace Content.Server.CMU14.AdminAI;
 
-/// <summary>Test-only UDS implementation. Not connected to Content.Server until the IPC gate passes.</summary>
-internal sealed class UdsSpikeClient : IAIInferenceClient, IDisposable
+/// <summary>Local UDS transport. No DNS, TCP fallback, redirects, tools or game actions.</summary>
+public sealed class UdsAIInferenceClient : IAIInferenceClient, IDisposable
 {
     private readonly HttpClient _client;
     private readonly AIInferenceOptions _options;
 
-    public UdsSpikeClient(string socketPath, AIInferenceOptions options)
+    public UdsAIInferenceClient(AIInferenceOptions options) : this(options.SocketPath, options) { }
+
+    internal UdsAIInferenceClient(string socketPath, AIInferenceOptions options)
     {
         if (!options.IsValid())
             throw new ArgumentException("Invalid inference limits.", nameof(options));

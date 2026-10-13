@@ -3,9 +3,10 @@
 Дата проверки: 2026-10-13. Репозиторий `flex5hybrid/RussianCM`, база
 `origin/master` = `70bb8f196b1`, ветка `codex/rucmu-admin-ai-stage-a`.
 
-**Статус: после разрешения пользователя реальный IPC smoke-тест вне sandbox
-инструмента прошёл на Windows. Этап A ещё не принят: полная сборка и проверка
-из Content.Server на целевом Linux остаются неподтверждёнными. Интеграция с ahelp
+**Статус: IPC из настоящего собранного Content.Server подтверждён на изолированном
+серверном потоке Windows. Content.Shared и Content.Server собраны против
+существующих бинарников зависимостей без пересборки RobustToolbox. Этап A ещё
+не принят: проверка на целевом Linux остаётся неподтверждённой. Интеграция с ahelp
 не начата, к этапу B не переходить.** Диагностический mock-worker не является
 ИИ и не доказывает работоспособность llama-server или качество модели.
 
@@ -47,13 +48,16 @@
   завершённого ответа assistant. Пустые, повреждённые, чрезмерно вложенные,
   слишком большие, обрезанные ответы и tool/function calls отвергаются.
 - Server-only CVar, по умолчанию `enabled=false`. `AdminAICVars.Read` читает
-  свежий snapshot и отключает его при неверных значениях. **Пока потребителя
-  CVar нет: установка enabled=true не запускает никакого процесса/генерации.**
+  свежий snapshot и отключает его при неверных значениях. **Потребитель теперь
+  только ручной health-probe: установка enabled=true не запускает никакого
+  процесса/генерации.**
 - Отдельный диагностический `Tools/AdminAI.Spike`: настоящий HTTP/JSON по UDS,
   proxy/redirect/cookies отключены, только HTTP/1.1, жёсткий лимит body,
   таймаут и отмена. URI `http://localhost/` используется только для HTTP framing;
   каждый `ConnectCallback` открывает `AddressFamily.Unix`, DNS/TCP fallback нет.
-  Этот транспорт намеренно не компилируется в Content.Server.
+  После smoke-тестов транспорт перенесён в `Content.CMU/Server/AdminAI/UdsAIInferenceClient.cs`
+  и компилируется в Content.Server. Инструменты используют тот же исходник,
+  а серверные интеграционные тесты — настоящий собранный Content.Server.dll.
 - Mock-worker как отдельный console process для проверки протокола.
   Ответ помечен `[MOCK WORKER: NO MODEL]`; GGUF не скачивается/не загружается.
   Существующий endpoint не удаляется перед bind; процесс живёт максимум 5 минут.
@@ -75,7 +79,7 @@
 
 | CVar | Default | Проверка при чтении snapshot |
 | --- | --- | --- |
-| `cmu.admin_ai.enabled` | `false` | Не активирует заблокированный прототип |
+| `cmu.admin_ai.enabled` | `false` | Разрешает только ручной health-probe без генерации/отправки сообщений |
 | `cmu.admin_ai.socket_path` | `/run/rucmu-ai/llama.sock` | Каталог `/run/rucmu-ai/`, ASCII имя, `.sock`, без traversal; до 107 UTF-8 bytes |
 | `cmu.admin_ai.request_timeout_seconds` | `45` | 1–60 |
 | `cmu.admin_ai.max_input_chars` | `4096` | 1–16384 |
@@ -125,7 +129,7 @@ dotnet Tools/AdminAI.Spike/bin/Debug/net10.0/AdminAI.Spike.dll probe /tmp/rucmu-
 Успешная проверка должна показать `UDS health: Ready` и
 `UDS inference protocol: Success`. Это проверит IPC с mock, но после этого
 ещё требуется проверка **из Content.Server** на целевом Linux и с закреплённой
-версией реального llama-server. До неё не переносить транспорт в сервер.
+версией реального llama-server. До неё не считать этап A принятым.
 
 Поддержка `.sock` в `--host` описана в
 [официальной документации llama-server](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md).
@@ -206,7 +210,104 @@ dotnet test Tools/AdminAI.Tests/AdminAI.Tests.csproj --no-build --no-restore --l
 игровой Content.Server и нагрузка RuCMU + 3 Squad. Успех smoke не снимает
 оставшиеся критерии приёмки A и не разрешает автоматически этап E.
 
-## Изменённые файлы
+## Продолжение A: серверный транспорт и реальные отказы IPC
+
+После команды пользователя «Работаем дальше»:
+
+- `UdsAIInferenceClient` перенесён в серверный модуль. Production-конструктор
+  принимает проверенный `AIInferenceOptions`; отдельный internal-конструктор
+  позволяет тестам выбрать собственный локальный endpoint, не меняя production CVar.
+- Добавлен `admin_ai_probe`, только для локальной серверной консоли или
+  администратора с Debug. Он делает только `GET /health`, не вызывает генерацию.
+  По умолчанию отключён. На время одного запроса повторный запуск отвергается;
+  IPC выполняется вне игрового потока, права и snapshot CVar перепроверяются
+  перед выдачей статуса. Абсолютный путь сокета и модельный текст не выводятся.
+- Добавлены английские/русские строки команды.
+- Mock-worker поддерживает тестовые отказы. Реальный UDS проверен при зависании
+  до заголовков/во время чтения body, активной отмене, обрыве, недостающем body,
+  повреждённом/пустом JSON и превышении лимита body без Content-Length.
+  Redirect отвергается без повторного запроса; неуспешный второй bind не удаляет
+  сокет работающего первого worker. Эти режимы существуют только в тестовом mock.
+- Два теста `AdminAIServerIpcTests` используют **настоящий собранный Content.Server.dll**
+  на потоке `RobustIntegrationTest.ServerIntegrationInstance`, без игровых
+  прототипов/игроков/production-конфига. Первый проверяет health; второй проверяет
+  обработку серверных действий при зависшем IPC и отмену без возвращения черновика.
+
+| Проверка | Фактический результат |
+| --- | --- |
+| `dotnet restore Content.Server/Content.Server.csproj --disable-parallel --verbosity minimal` вне sandbox инструмента | Успешно; прежний blocker restore снят |
+| Content.Shared с `BuildProjectReferences=false` и существующими бинарниками зависимостей | 0 errors, 18 warnings, 3:16.62 |
+| Content.Server с текущим Content.Shared, сохранёнными анализаторами/генераторами и существующими engine binaries | **0 errors, 64 warnings**, 40.83 s |
+| Tools/AdminAI.Spike | 0 errors, 0 warnings |
+| Tools/AdminAI.Tests | 0 errors; 2 NU1900 из недоступного NuGet audit при sandbox build |
+| `dotnet test Tools/AdminAI.Tests/AdminAI.Tests.csproj --no-build --no-restore` с реальным UDS | **46 passed, 0 failed, 0 skipped**, около 2 s |
+| Tools/AdminAI.ServerTests build | 0 errors, 0 warnings |
+| `dotnet test Tools/AdminAI.ServerTests/AdminAI.ServerTests.csproj --no-build --no-restore` | **2 passed, 0 failed, 0 skipped**, 611 ms |
+| `bash -n Tools/AdminAI.Spike/linux-smoke.sh` через Git Bash | Синтаксис корректен; это не Linux runtime test |
+
+Сборка всего C#-кода Content.Shared/Content.Server выполнена без пересборки
+RobustToolbox, через локальный ignored MSBuild helper
+`.codex-build/admin-ai/stage-a-followup/frozen-references.targets`.
+Он использует уже собранные зависимости/анализаторы и их runtime support files;
+исходники движка не меняет, проверки анализаторов не отключает. Это **сборка
+Content-проектов против существующих зависимостей**, не чистая сборка всего
+графа с нуля. Полный набор Content.IntegrationTests не запускался.
+Основные warnings относятся к существующим устаревшим API и NuGet audit
+ImageSharp; обновление сторонних модулей в AI-коммит не включено.
+
+Точные команды сборки Content-проектов в этом окружении:
+
+```powershell
+$frozen = 'C:\Users\ha13r\GitHub\ColonialMarinesUniverse\.codex-worktrees\rucmu-admin-ai-stage-a\.codex-build\admin-ai\stage-a-followup\frozen-references.targets'
+$worktree = 'C:\Users\ha13r\GitHub\ColonialMarinesUniverse\.codex-worktrees\rucmu-admin-ai-stage-a'
+$existing = 'C:\Users\ha13r\GitHub\ColonialMarinesUniverse'
+dotnet build Content.Shared/Content.Shared.csproj --no-restore -p:BuildProjectReferences=false "-p:CustomAfterMicrosoftCommonTargets=$frozen" "-p:AdminAIWorktreeRoot=$worktree" "-p:AdminAIExistingRoot=$existing"
+dotnet build Content.Server/Content.Server.csproj --no-restore -p:BuildProjectReferences=false "-p:CustomAfterMicrosoftCommonTargets=$frozen" "-p:AdminAIWorktreeRoot=$worktree" "-p:AdminAIExistingRoot=$existing"
+```
+
+Tools/AdminAI.ServerTests принимает пути `AdminAIContentServerDirectory`,
+`AdminAIEngineAssemblyDirectory`, `AdminAIEngineResourceDirectory`.
+Тестовые пути задаются через `RUCMU_AI_TEST_SOCKET` (короткий свободный .sock)
+и `RUCMU_AI_ENGINE_RESOURCES` (настоящий RobustToolbox/Resources).
+Настоящие ресурсы копируются в стандартный test output layout. Конфигурация
+sandbox движка не меняется; игровые прототипы в этих двух focused-тестах
+не загружаются. Reflection для обхода проверок не применяется.
+Результаты/журналы: `.codex-build/admin-ai/stage-a-followup/`.
+
+На этой машине WSL не установлен и Docker не найден; Linux/SSH-стенд не указан.
+Для Linux подготовлен скрипт, использующий **уже собранные** переносимые артефакты:
+
+```sh
+bash Tools/AdminAI.Spike/linux-smoke.sh
+```
+
+Он требует Linux и .NET 10 runtime; ничего не скачивает. Проверяет selftest,
+46 тестов протокола/IPC, отдельные процессы, отказ и повторный запуск worker,
+а также серверный поток из AdminAI.ServerTests при наличии его артефакта.
+Отсутствие артефакта/пропущенные проверки дают неуспех, а не фиктивную приёмку.
+Runtime output с реальными ресурсами должен сохранять layout Tools/*/bin.
+Отчёт содержит OS/runtime и результаты в `.codex-build/admin-ai/linux-smoke-*`.
+Скрипт здесь не исполнялся на Linux; systemd/PSI/cgroups и реальный GGUF не проверены.
+
+Для ручной health-проверки на отдельном Linux-стенде с worker и подготовленным
+сокетом `/run/rucmu-ai/llama.sock`, из серверной консоли:
+
+```text
+cvar cmu.admin_ai.enabled true
+admin_ai_probe
+cvar cmu.admin_ai.enabled false
+```
+
+Это не отправляет ahelp и не запускает модель/systemd. При выключении CVar
+до завершения запроса результат не показывается. Автоматического health polling
+или inference coordinator на этапе A нет.
+
+Изменения продолжения: серверный клиент/health-команда, 2 locale-файла,
+серверные IPC-тесты, включение их mock-fixture в Content.IntegrationTests,
+отдельный project AdminAI.ServerTests, новые fault-сценарии и Linux smoke-скрипт.
+Прежний `Tools/AdminAI.Spike/UdsSpikeClient.cs` заменён серверным файлом.
+
+## Файлы первоначального коммита этапа A
 
 Все файлы новые; существующие системы ahelp, webhook, UI, SharedBwoinkSystem,
 RobustToolbox и upstream-подмодули не редактировались.
@@ -233,20 +334,21 @@ Docs/rucmu-admin-ai-stage-a.md
 
 ## Что ещё требуется для приёмки A и перехода к B
 
-1. Восстановить штатную сборку зависимостей на подходящем стенде и выполнить
-   полную сборку Content.Server и указанные Content.IntegrationTests.
+1. На Linux проверить сборку с штатно подготовленными зависимостями. На Windows
+   Content.Shared и Content.Server уже собраны с сохранением бинарников движка;
+   46 протокольных/IPC тестов и 2 сфокусированных серверных теста прошли.
 2. Выполнить реальный UDS round-trip на Linux без изменения разрешений sandbox
    и подтвердить допустимость запроса из Content.Server. При запрете engine
    sandbox зафиксировать ошибку и остановиться; не отключать его проверку.
-3. Подтвердить отказ/таймаут/отмену/обрыв и перезапуск mock-worker при настоящем
-   IPC. Парсерные и in-memory проверки не заменяют этих сценариев.
+3. Повторить подтверждённые на Windows отказ/таймаут/отмену/обрыв и перезапуск
+   mock-worker на Linux. Скрипт `Tools/AdminAI.Spike/linux-smoke.sh` подготовлен.
 4. Затем последовательно выполнять B (systemd, ресурсные лимиты, bounded queue,
    governor), C (DraftOnly и права), D (логи и доказательства).
    Этап E требует отдельного ручного принятия предыдущих.
 
 Нагрузка RuCMU + 3 Squad, Linux PSI/cgroups, лицензия/hash GGUF, качество
 реальной модели, права UI и поведение при изменении раунда **не проверены**.
-Ни один игровой сервер или Squad не запускался/не перенастраивался, модель
+Production RuCMU и Squad не запускались/не перенастраивались, модель
 не загружалась. Не заявляется production readiness или отсутствие влияния
 на производительность на основании этих локальных тестов.
 

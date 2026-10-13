@@ -11,5 +11,6 @@
     <Compile Include="../../Content.CMU/Server/AdminAI/AIInferenceOptions.cs" Link="Server/AIInferenceOptions.cs" />
     <Compile Include="../../Content.CMU/Server/AdminAI/AIInferenceProtocol.cs" Link="Server/AIInferenceProtocol.cs" />
     <Compile Include="../../Content.CMU/Server/AdminAI/UnavailableAIInferenceClient.cs" Link="Server/UnavailableAIInferenceClient.cs" />
+    <Compile Include="../../Content.CMU/Server/AdminAI/UdsAIInferenceClient.cs" Link="Server/UdsAIInferenceClient.cs" />
   </ItemGroup>
 </Project>
