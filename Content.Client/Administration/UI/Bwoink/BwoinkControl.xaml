@@ -15,6 +15,7 @@
                 <cc:PlayerListControl Access="Public" Name="ChannelSelector" HorizontalExpand="True" VerticalExpand="True" SizeFlagsStretchRatio="2" MinWidth="200" />
                 <BoxContainer Orientation="Vertical" HorizontalExpand="True" VerticalExpand="True" SizeFlagsStretchRatio="2" MinWidth="360">
                     <BoxContainer Access="Public" Name="BwoinkArea" VerticalExpand="True" HorizontalExpand="True" />
+                    <BoxContainer Name="AIWorkspaceSlot" Orientation="Vertical" HorizontalExpand="True" />
                 </BoxContainer>
             </SplitContainer>
             <BoxContainer Orientation="Horizontal" SetHeight="30" >

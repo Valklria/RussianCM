@@ -1,6 +1,8 @@
 using System.Linq;
 using System.Text;
 using Content.Client.Administration.Managers;
+using Content.Client.CMU14.AdminAI;
+using Content.Client.Administration.Systems;
 using Content.Client.Administration.UI.CustomControls;
 using Content.Client.UserInterface.Systems.Bwoink;
 using Content.Shared.Administration;
@@ -27,6 +29,7 @@ namespace Content.Client.Administration.UI.Bwoink
         [Dependency] private IUserInterfaceManager _ui = default!;
         [Dependency] private IConfigurationManager _cfg = default!;
         public AdminAHelpUIHandler AHelpHelper = default!;
+        public AdminAIDraftControl AI { get; private set; } = default!;
 
         private PlayerInfo? _currentPlayer;
 
@@ -43,6 +46,12 @@ namespace Content.Client.Administration.UI.Bwoink
                 return;
 
             AHelpHelper = helper;
+            AI = new AdminAIDraftControl(); AIWorkspaceSlot.AddChild(AI);
+            AI.RequestDraft += request => IoCManager.Resolve<IEntitySystemManager>().GetEntitySystem<BwoinkSystem>().RequestAIDraft(request);
+            AI.InsertDraft += text =>
+            {
+                if (_adminManager.HasFlag(AdminFlags.Adminhelp) && _currentPlayer is { } player && AHelpHelper.TryGetChannel(player.SessionId, out var panel)) panel.InsertDraftText(text);
+            };
 
             _adminManager.AdminStatusUpdated += UpdateButtons;
             UpdateButtons();
@@ -208,6 +217,7 @@ namespace Content.Client.Administration.UI.Bwoink
                 return;
 
             _adminManager.AdminStatusUpdated -= UpdateButtons;
+            AI?.Close();
         }
 
         public void OnBwoink(NetUserId channel)
@@ -293,6 +303,7 @@ namespace Content.Client.Administration.UI.Bwoink
         private void SwitchToChannel(NetUserId? ch)
         {
             UpdateButtons();
+            AI.Select(ch);
 
             AHelpHelper.HideAllPanels();
             if (ch != null)

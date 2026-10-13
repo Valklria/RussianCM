@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Content.Server.Administration.Managers;
+using Content.Server.CMU14.AdminAI;
 using Content.Server.Afk;
 using Content.Server.Database;
 using Content.Server.Discord;
@@ -718,6 +719,10 @@ namespace Content.Server.Administration.Systems
                 return;
 
             _afkManager.PlayerDidAction(senderSession);
+
+            // CMU14: record only accepted ahelp input. The observer never generates or sends a reply here.
+            RaiseLocalEvent(new AdminAHelpAcceptedEvent(message.UserId.UserId, _gameTicker.RoundId,
+                senderAHelpAdmin, message.Text, message.AdminOnly));
 
             // If it's not an admin / admin chooses to keep the sound and message is not an admin only message, then play it.
             var playSound = (!senderAHelpAdmin || message.PlaySound) && !message.AdminOnly;

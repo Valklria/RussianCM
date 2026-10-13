@@ -1,5 +1,6 @@
 #nullable enable
 using Content.Shared.Administration;
+using Content.Shared.Administration.AdminAI;
 using JetBrains.Annotations;
 using Robust.Shared.Network;
 using Robust.Shared.Timing;
@@ -12,7 +13,18 @@ namespace Content.Client.Administration.Systems
         [Dependency] private IGameTiming _timing = default!;
 
         public event EventHandler<BwoinkTextMessage>? OnBwoinkTextMessageRecieved;
+        public event Action<AdminAIDraftState>? OnAdminAIDraftState;
+        public event Action? OnAdminAIDraftReset;
         private (TimeSpan Timestamp, bool Typing) _lastTypingUpdateSent;
+
+        public override void Initialize()
+        {
+            base.Initialize();
+            SubscribeNetworkEvent<AdminAIDraftState>((state, _) => OnAdminAIDraftState?.Invoke(state));
+            SubscribeNetworkEvent<AdminAIDraftReset>((_, _) => OnAdminAIDraftReset?.Invoke());
+        }
+
+        public void RequestAIDraft(AdminAIDraftRequest request) => RaiseNetworkEvent(request);
 
         protected override void OnBwoinkTextMessage(BwoinkTextMessage message, EntitySessionEventArgs eventArgs)
         {

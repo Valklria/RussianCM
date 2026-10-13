@@ -43,11 +43,19 @@ public static class AdminAICVars
     public static readonly CVarDef<float> SimulationDegraded = CVarDef.Create("cmu.admin_ai.tick_budget_degraded", 0.8f, Flags);
     public static readonly CVarDef<float> SimulationPaused = CVarDef.Create("cmu.admin_ai.tick_budget_paused", 1.2f, Flags);
     public static readonly CVarDef<string> CgroupPaths = CVarDef.Create("cmu.admin_ai.cgroup_paths", "", Flags);
+    public static readonly CVarDef<int> ContextTtlSeconds = CVarDef.Create("cmu.admin_ai.context_ttl_seconds", 300, Flags);
+    public static readonly CVarDef<int> DraftTtlSeconds = CVarDef.Create("cmu.admin_ai.draft_ttl_seconds", 120, Flags);
+    public static readonly CVarDef<int> MaxConversations = CVarDef.Create("cmu.admin_ai.max_conversations", 128, Flags);
+    public static readonly CVarDef<int> MaxViews = CVarDef.Create("cmu.admin_ai.max_private_views", 32, Flags);
+    public static readonly CVarDef<int> ContextMessages = CVarDef.Create("cmu.admin_ai.context_messages", 8, Flags);
+    public static readonly CVarDef<int> ContextMessageChars = CVarDef.Create("cmu.admin_ai.context_message_chars", 512, Flags);
+    public static readonly CVarDef<int> DraftCooldownSeconds = CVarDef.Create("cmu.admin_ai.draft_cooldown_seconds", 5, Flags);
 
     public static readonly CVarDef<bool>[] RuntimeBools = { Enabled, GovernorEnabled };
     public static readonly CVarDef<int>[] RuntimeInts = { TimeoutSeconds, MaxInputChars, MaxOutputTokens, MaxOutputChars,
         MaxConcurrentRequests, QueueCapacity, QueueTtlSeconds, DegradedInputChars, DegradedOutputTokens,
-        PollSeconds, RecoverySeconds, MaxSampleAgeSeconds };
+        PollSeconds, RecoverySeconds, MaxSampleAgeSeconds, ContextTtlSeconds, DraftTtlSeconds, MaxConversations,
+        MaxViews, ContextMessages, ContextMessageChars, DraftCooldownSeconds };
     public static readonly CVarDef<float>[] RuntimeFloats = { CpuDegraded, CpuPaused, MemoryDegraded, MemoryPaused,
         IoDegraded, IoPaused, SimulationDegraded, SimulationPaused };
     public static readonly CVarDef<string>[] RuntimeStrings = { SocketPath, CgroupPaths };
@@ -60,6 +68,10 @@ public static class AdminAICVars
         config.GetCVar(CpuDegraded), config.GetCVar(CpuPaused), config.GetCVar(MemoryDegraded), config.GetCVar(MemoryPaused),
         config.GetCVar(IoDegraded), config.GetCVar(IoPaused), config.GetCVar(SimulationDegraded), config.GetCVar(SimulationPaused),
         config.GetCVar(RecoverySeconds), config.GetCVar(PollSeconds), config.GetCVar(MaxSampleAgeSeconds));
+
+    public static AIDraftContextOptions ReadContext(IConfigurationManager config) => new(config.GetCVar(MaxConversations),
+        config.GetCVar(MaxViews), config.GetCVar(ContextMessages), config.GetCVar(ContextMessageChars),
+        config.GetCVar(ContextTtlSeconds), config.GetCVar(DraftTtlSeconds), config.GetCVar(DraftCooldownSeconds));
 
     /// <summary>Reads a fresh snapshot; invalid values always disable it.</summary>
     public static AIInferenceOptions Read(IConfigurationManager config)

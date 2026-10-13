@@ -104,6 +104,7 @@ public sealed class AIInferenceTests
             Assert.That(root.TryGetProperty("tools", out _), Is.False);
             Assert.That(root.GetProperty("stream").GetBoolean(), Is.False);
             Assert.That(root.GetProperty("max_tokens").GetInt32(), Is.EqualTo(256));
+            Assert.That(root.GetProperty("chat_template_kwargs").GetProperty("enable_thinking").GetBoolean(), Is.False);
         });
     }
 
@@ -139,6 +140,7 @@ public sealed class AIInferenceTests
     [TestCase("")]
     [TestCase("  \n ")]
     [TestCase("12345")]
+    [TestCase("<think>private reasoning</think>draft")]
     public void EmptyAndOversizedDraftsAreRejected(string text)
     {
         var result = AIInferenceProtocol.ParseResponse(CorrelationId, Response(text), new(MaxOutputChars: 4));

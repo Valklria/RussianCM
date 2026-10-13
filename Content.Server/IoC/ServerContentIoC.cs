@@ -103,6 +103,7 @@ internal static class ServerContentIoC
         deps.Register<ServerLogsDownloadManager>();
         deps.Register<ICMUServerPerformanceDiagnostics, CMUServerPerformanceDiagnosticsManager>();
         deps.Register<IAdminAIService, AdminAIService>();
+        deps.Register<IAdminAIRoundContext, AdminAIRoundContext>();
 
         // RMC14
         deps.Register<LinkAccountManager>();
