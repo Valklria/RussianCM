@@ -11,7 +11,8 @@ User=rucmu-ai
 Group=rucmu-ai-socket
 EnvironmentFile=/etc/rucmu-ai/worker.env
 ExecStartPre=/usr/bin/bash /opt/rucmu-ai/bin/worker-preflight.sh
-ExecStart=/opt/rucmu-ai/bin/llama-server --model ${MODEL_PATH} --host /run/rucmu-ai/llama.sock --ctx-size 4096 --parallel 1 --threads 2 --threads-batch 2 --n-gpu-layers 0 --no-kv-offload --poll 0 --poll-batch 0 --offline --no-webui --no-agent --log-disable
+# Match inference threads to the one-CPU quota to avoid worker-induced CPU pressure.
+ExecStart=/opt/rucmu-ai/bin/llama-server --model ${MODEL_PATH} --host /run/rucmu-ai/llama.sock --ctx-size 4096 --parallel 1 --threads 1 --threads-batch 1 --n-gpu-layers 0 --no-kv-offload --poll 0 --poll-batch 0 --offline --no-webui --no-agent --log-disable
 WorkingDirectory=/opt/rucmu-ai
 RuntimeDirectory=rucmu-ai
 RuntimeDirectoryMode=0770

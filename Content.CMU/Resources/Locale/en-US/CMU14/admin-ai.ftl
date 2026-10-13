@@ -7,6 +7,7 @@ cmu-admin-ai-probe-unavailable = Local AI worker health: Unavailable.
 cmu-admin-ai-status-description = Show cached AI worker, governor and queue status.
 cmu-admin-ai-status-help = Usage: admin_ai_status
 cmu-admin-ai-status = AI enabled={ $enabled }, state={ $state }, worker={ $health }, reason={ $reason }; pending={ $pending }, running={ $running }, accepted={ $accepted }, completed={ $completed }, rejected={ $rejected } (since reload).
+cmu-admin-ai-status-load = Last measured load: CPU PSI={ $cpu }%, memory={ $memory }%, I/O={ $io }%; maximum tick boundary / budget={ $tick }.
 cmu-admin-ai-draft-title = AI assistant — private draft
 cmu-admin-ai-draft-prepare = Prepare
 cmu-admin-ai-draft-regenerate = Retry

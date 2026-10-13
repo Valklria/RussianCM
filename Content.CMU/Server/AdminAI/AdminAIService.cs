@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using Stopwatch = System.Diagnostics.Stopwatch;
 using System.Diagnostics.Metrics;
 using System.Threading;
@@ -151,7 +152,12 @@ public sealed class AdminAIService : IAdminAIService
                 {
                     var governor = _governor!;
                     _load = load; var state = governor.Observe(load, Stopwatch.GetElapsedTime(_started));
-                    if (state != _state) transition = $"AI governor: {_state} -> {state}, reason={governor.Reason}";
+                    if (state != _state)
+                    {
+                        var details = load == null ? "load=unavailable" : string.Create(CultureInfo.InvariantCulture,
+                            $"cpu_psi={load.CpuSomeAvg10:F2} memory_psi={load.MemoryFullAvg10:F2} io_psi={load.IoFullAvg10:F2} tick_max_ratio={load.SimulationBudgetRatio:F3}");
+                        transition = $"AI governor: {_state} -> {state}, reason={governor.Reason}, {details}";
+                    }
                     _state = state; _reason = governor.Reason;
                     Interlocked.Exchange(ref _lastLoadStamp, load == null ? 0 : Stopwatch.GetTimestamp());
                     queue.SetAvailability(state, _health);

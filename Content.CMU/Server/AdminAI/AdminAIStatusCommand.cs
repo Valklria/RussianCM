@@ -1,4 +1,5 @@
 using Content.Server.Administration;
+using System.Globalization;
 using Content.Server.Administration.Managers;
 using Content.Shared.Administration;
 using Robust.Shared.Console;
@@ -26,5 +27,11 @@ public sealed class AdminAIStatusCommand : IConsoleCommand
             ("pending", snapshot.Queue?.Pending ?? 0), ("running", snapshot.Queue?.Running == true ? 1 : 0),
             ("accepted", snapshot.Queue?.Accepted ?? 0), ("completed", snapshot.Queue?.Completed ?? 0),
             ("rejected", snapshot.Queue?.Rejected ?? 0)));
+        if (snapshot.Load is { } load)
+            shell.WriteLine(Loc.GetString("cmu-admin-ai-status-load",
+                ("cpu", load.CpuSomeAvg10.ToString("F2", CultureInfo.InvariantCulture)),
+                ("memory", load.MemoryFullAvg10.ToString("F2", CultureInfo.InvariantCulture)),
+                ("io", load.IoFullAvg10.ToString("F2", CultureInfo.InvariantCulture)),
+                ("tick", load.SimulationBudgetRatio.ToString("F3", CultureInfo.InvariantCulture))));
     }
 }

@@ -155,6 +155,29 @@ public sealed class AdminAIClientUiTests
         });
     }
 
+    [TestCase(AdminAIDraftStatus.Paused)]
+    [TestCase(AdminAIDraftStatus.Unavailable)]
+    public async Task TemporaryInfrastructureFailureAllowsManualRetryWithoutSendingAutomatically(AdminAIDraftStatus status)
+    {
+        using var client = StartClient(); await client.WaitIdleAsync();
+        await client.WaitAssertion(() =>
+        {
+            Culture(client, "ru-RU");
+            var control = new AdminAIDraftControl(); var requests = new List<AdminAIDraftRequest>();
+            control.RequestDraft += requests.Add; control.Select(new(Guid.NewGuid()));
+            var opened = requests.Single(); var view = Guid.NewGuid();
+            control.Receive(new(opened.Channel, opened.SelectionId, view, Guid.NewGuid(), Guid.Empty,
+                status, "", [], "Paused/Ready", 0, 0));
+            var prepare = Descendants(control).OfType<Button>().Single(button => button.Name == "ai-prepare");
+            Assert.That(prepare.Disabled, Is.False, "A recovered worker must not require closing the ahelp window to retry.");
+            Assert.That(requests, Has.Count.EqualTo(1), "A status update must not issue an automatic retry.");
+            control.Receive(new(opened.Channel, opened.SelectionId, view, Guid.NewGuid(), Guid.NewGuid(),
+                AdminAIDraftStatus.Working, "", [], "Normal/Ready", 0, 0));
+            Assert.That(prepare.Disabled, Is.True, "An active request still prevents duplicate preparation.");
+            Assert.That(requests, Has.Count.EqualTo(1));
+        });
+    }
+
     [Test]
     public async Task SharedAndClientAssembliesPassUnmodifiedEngineSandbox()
     {

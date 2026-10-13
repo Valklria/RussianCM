@@ -2,9 +2,9 @@ using System.Net.Sockets;
 using Content.Server.CMU14.AdminAI;
 using Content.Tools.AdminAI.Spike;
 
-if (args.Length != 2 || args[0] is not ("worker" or "probe" or "selftest"))
+if (args.Length != 2 || args[0] is not ("worker" or "probe" or "selftest" or "model-smoke"))
 {
-    Console.Error.WriteLine("Usage: AdminAI.Spike <worker|probe|selftest> <absolute .sock path, <=107 UTF-8 bytes>");
+    Console.Error.WriteLine("Usage: AdminAI.Spike <worker|probe|selftest|model-smoke> <absolute .sock path, <=107 UTF-8 bytes>");
     return 1;
 }
 
@@ -34,14 +34,32 @@ try
         var workerTask = fixture?.RunAsync(lifetime.Token);
         try
         {
-            using var client = new UdsAIInferenceClient(path, new AIInferenceOptions(Enabled: true, TimeoutSeconds: 5));
+            var modelSmoke = args[0] == "model-smoke";
+            var options = modelSmoke
+                ? new AIInferenceOptions(Enabled: true, SocketPath: path, TimeoutSeconds: 45)
+                : new AIInferenceOptions(Enabled: true, TimeoutSeconds: 5);
+            // Real model acceptance uses the production endpoint validator and timeout.
+            using var client = modelSmoke ? new UdsAIInferenceClient(options) : new UdsAIInferenceClient(path, options);
             var health = await client.CheckHealthAsync(lifetime.Token);
             Console.WriteLine($"UDS health: {health}");
             if (health != AIWorkerHealth.Ready)
                 return 2;
-            var result = await client.InferAsync(new(Guid.NewGuid(), "This is a synthetic IPC probe; no player data."), lifetime.Token);
+            var input = modelSmoke
+                ? "Синтетический тест, реальных игроков нет. Игрок пишет: «Меня случайно задел союзник, что делать?» " +
+                  "Напиши одно короткое нейтральное предложение для черновика администратора: попроси время и место события. " +
+                  "Не выноси решений о виновности или наказаниях."
+                : "This is a synthetic IPC probe; no player data.";
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            var result = await client.InferAsync(new(Guid.NewGuid(), input), lifetime.Token);
             Console.WriteLine($"UDS inference protocol: {result.Status}");
-            // Do not print model output or prompts. A mock success is not inference quality evidence.
+            if (modelSmoke)
+            {
+                Console.WriteLine($"Synthetic model request elapsed: {timer.Elapsed.TotalSeconds:F2}s");
+                // Only this fixed synthetic request may expose a sample, never real player data.
+                if (result.Status == AIInferenceStatus.Success)
+                    Console.WriteLine($"UNTRUSTED SYNTHETIC DRAFT: {result.UntrustedText}");
+            }
+            // Ordinary mock/probe modes never print prompts or responses.
             return result.Status == AIInferenceStatus.Success ? 0 : 2;
         }
         finally

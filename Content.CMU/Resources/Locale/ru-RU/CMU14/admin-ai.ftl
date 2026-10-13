@@ -7,6 +7,7 @@ cmu-admin-ai-probe-unavailable = Локальный ИИ-процесс: нед�
 cmu-admin-ai-status-description = Показать сохранённое состояние AI Worker, защиты от перегрузки и очереди.
 cmu-admin-ai-status-help = Использование: admin_ai_status
 cmu-admin-ai-status = ИИ включён={ $enabled }, режим={ $state }, worker={ $health }, причина={ $reason }; ожидают={ $pending }, выполняются={ $running }, принято={ $accepted }, завершено={ $completed }, отклонено={ $rejected } (с последнего обновления настроек).
+cmu-admin-ai-status-load = Последняя измеренная нагрузка: PSI CPU={ $cpu }%, память={ $memory }%, диск={ $io }%; максимум границы тика / бюджет={ $tick }.
 cmu-admin-ai-draft-title = ИИ-помощник — приватный черновик
 cmu-admin-ai-draft-prepare = Подготовить
 cmu-admin-ai-draft-regenerate = Заново

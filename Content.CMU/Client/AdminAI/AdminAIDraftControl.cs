@@ -103,8 +103,10 @@ public sealed partial class AdminAIDraftControl : BoxContainer
         }
         _hasDraft = isDraft; _insert.Disabled = !isDraft;
         _prepare.Text = Loc.GetString(isDraft ? "cmu-admin-ai-draft-regenerate" : "cmu-admin-ai-draft-prepare");
-        _prepare.Disabled = _view == Guid.Empty || state.Status is AdminAIDraftStatus.Working or AdminAIDraftStatus.Paused
-            or AdminAIDraftStatus.Unavailable or AdminAIDraftStatus.Disabled;
+        // Temporary protection/worker failures must allow a manual retry. The server rechecks admission;
+        // this does not poll, infer automatically or permit duplicate requests while one is running.
+        _prepare.Disabled = _view == Guid.Empty || state.Status is AdminAIDraftStatus.Working
+            or AdminAIDraftStatus.Disabled or AdminAIDraftStatus.Denied;
         _cancel.Disabled = state.Status != AdminAIDraftStatus.Working;
         _sourceToggle.Disabled = state.Sources.Length == 0;
         _sources.RemoveAllChildren();
