@@ -3,7 +3,9 @@
 Дата проверки: 2026-10-13. Репозиторий `flex5hybrid/RussianCM`, база
 `origin/master` = `70bb8f196b1`, ветка `codex/rucmu-admin-ai-stage-a`.
 
-**Статус: этап A заблокирован на реальном IPC, не принят. Интеграция с ahelp
+**Статус: после разрешения пользователя реальный IPC smoke-тест вне sandbox
+инструмента прошёл на Windows. Этап A ещё не принят: полная сборка и проверка
+из Content.Server на целевом Linux остаются неподтверждёнными. Интеграция с ahelp
 не начата, к этапу B не переходить.** Диагностический mock-worker не является
 ИИ и не доказывает работоспособность llama-server или качество модели.
 
@@ -85,7 +87,7 @@
 квоты worker ещё не реализованы: диагностический client нельзя использовать
 как production coordinator или запускать массовый инференс на игровой машине.
 
-## Воспроизводимый IPC blocker
+## Первоначальный IPC blocker внутри sandbox инструмента
 
 На этой Windows-среде разрешено создать `Socket(AddressFamily.Unix, ...)`,
 но настоящий `Bind(new UnixDomainSocketEndPoint(path))` завершается ошибкой:
@@ -99,8 +101,9 @@ IPC_BLOCKED: SocketError=AccessDenied, native=10013:
 UDS невозможен на целевом Linux или в штатном Content.Server. На Linux здесь
 тест не запускался. Первоначальный слишком длинный Windows temp-path заменён
 на короткий путь внутри разрешённого workspace; после этого воспроизведён 10013.
-Разрешения среды/движка не менялись для IPC, запуск с повышенными правами для
-сокетов не предпринимался. Git-операции ветки и проверка подмодулей использовали
+При первоначальной проверке разрешения среды/движка не менялись для IPC,
+запуск вне sandbox инструмента для сокетов не предпринимался.
+Git-операции ветки и проверка подмодулей использовали
 штатное разрешение инструмента на доступ к Git metadata, отдельно от IPC.
 
 Из корня worktree:
@@ -131,7 +134,7 @@ dotnet Tools/AdminAI.Spike/bin/Debug/net10.0/AdminAI.Spike.dll probe /tmp/rucmu-
 Установленного llama-server и GGUF в этом этапе нет, конкретные версия,
 лицензия и hash не заявляются; их нужно зафиксировать при локальном развёртывании.
 
-## Фактические проверки
+## Первоначальные проверки до разрешения запуска IPC вне sandbox
 
 SDK: .NET 10.0.300. Все команды ниже выполнены из worktree этой ветки.
 
@@ -159,6 +162,49 @@ XML результатов и журналы сохранены локально
 `AdminAIEngineAssemblyDirectory`: тогда CVar-тест не включается, проходят 33
 проверки. Указание существующих бинарников — focused validation, а не полная
 сборка проекта, игровой integration test или подтверждение Linux runtime.
+
+## Smoke-тест после явного разрешения пользователя
+
+2026-10-13 пользователь разрешил запуск IPC-теста вне ограниченного sandbox
+инструмента. Настройки sandbox RobustToolbox, исходники и сборки движка
+не изменялись. Использованы уже собранные диагностические DLL, синтетический
+запрос и mock-worker без модели. Внешние AI API не вызываются.
+
+| Сценарий | Результат | Измеренное время |
+| --- | --- | --- |
+| `AdminAI.Spike.dll selftest <короткий абсолютный .sock путь>` | `UDS health: Ready`, `UDS inference protocol: Success`, exit 0; сокет удалён при dispose | 122 ms |
+| NUnit `ipc` внутри одного процесса | 1 passed, 0 failed, 0 skipped; реальный bind/connect/HTTP/JSON, socket cleanup подтверждён | 180 ms |
+| Worker и probe в отдельных процессах, запуск 1 | `Ready`, `Success`, exit 0 | 131 ms |
+| Probe после остановки тестового worker | `Unavailable`, ожидаемый exit 2; необработанного исключения нет | 84 ms |
+| Новый worker в отдельном процессе на том же пути | `Ready`, `Success`, exit 0 | 128 ms |
+| Повторный NUnit `boundary` | 34 passed, 0 failed, 0 skipped | — |
+| Обычный VSTest со всеми тестами прототипа | **35 passed, 0 failed, 0 skipped**, exit 0 | 101 ms test duration |
+
+Время CLI smoke-сценариев включает запуск dotnet-процесса и обработку mock;
+это не задержка реального LLM и не измерение игровых тиков. Длительность
+VSTest — значение отчёта test runner, без полного времени старта runner.
+
+Для проверки между процессами запускались два собственных тестовых worker
+по очереди (`Start-Process -WindowStyle Hidden`). После каждого теста остановлен
+только созданный worker, оставшийся сокет удалён по проверенному абсолютному
+пути внутри workspace. Игровые процессы не запускались и не останавливались.
+
+Финальный обычный прогон уже собранных DLL:
+
+```powershell
+$env:RUCMU_AI_TEST_SOCKET = 'C:\Users\ha13r\GitHub\ColonialMarinesUniverse\ai-vstest-<unique>.sock'
+dotnet test Tools/AdminAI.Tests/AdminAI.Tests.csproj --no-build --no-restore --logger 'trx;LogFileName=smoke-vstest.trx' --results-directory .codex-build/admin-ai/smoke-authorized-20261013
+```
+
+Локальные доказательства: `.codex-build/admin-ai/smoke-authorized-20261013/`
+содержит `results.json`, `separate-process-results.json`, stdout/stderr worker,
+результаты probe, `ipc-before-authorization.xml`, `ipc-after-authorization.xml`
+и `smoke-vstest.trx`. Прежняя ошибка AccessDenied внутри sandbox сохранена;
+успех относится к разрешённому запуску вне этого sandbox.
+
+Не проверены реальные timeout во время генерации, OOM, Linux, llama-server/GGUF,
+игровой Content.Server и нагрузка RuCMU + 3 Squad. Успех smoke не снимает
+оставшиеся критерии приёмки A и не разрешает автоматически этап E.
 
 ## Изменённые файлы
 
