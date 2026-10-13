@@ -1,4 +1,5 @@
 using Content.Server.CMU14.AdminAI;
+using System.Linq;
 using NUnit.Framework;
 using Robust.Shared.Configuration;
 
@@ -11,11 +12,10 @@ public sealed class AdminAIConfigurationTests
     public void ConfigurationIsServerOnlyAndDisabledByDefault()
     {
         Assert.That(AdminAICVars.Enabled.DefaultValue, Is.False);
-        foreach (var definition in new CVarDef[]
-        {
-            AdminAICVars.Enabled, AdminAICVars.SocketPath, AdminAICVars.TimeoutSeconds,
-            AdminAICVars.MaxInputChars, AdminAICVars.MaxOutputTokens, AdminAICVars.MaxOutputChars,
-        })
+        Assert.That(AdminAICVars.GovernorEnabled.DefaultValue, Is.True);
+        Assert.That(AdminAICVars.MaxConcurrentRequests.DefaultValue, Is.EqualTo(1));
+        foreach (var definition in AdminAICVars.RuntimeBools.Cast<CVarDef>().Concat(AdminAICVars.RuntimeInts)
+                     .Concat(AdminAICVars.RuntimeFloats).Concat(AdminAICVars.RuntimeStrings))
         {
             Assert.That(definition.Flags.HasFlag(CVar.SERVERONLY), Is.True);
             Assert.That((definition.Flags & (CVar.REPLICATED | CVar.NOTIFY)), Is.EqualTo(CVar.NONE));

@@ -23,6 +23,10 @@
     <Compile Include="../../Content.IntegrationTests/_CMU14/AdminAI/AIInferenceTests.cs" Link="Tests/AIInferenceTests.cs" />
     <Compile Include="../../Content.CMU/Server/AdminAI/UdsAIInferenceClient.cs" Link="Server/UdsAIInferenceClient.cs" />
     <Compile Include="../AdminAI.Spike/MockWorker.cs" Link="Spike/MockWorker.cs" />
+    <Compile Include="../../Content.CMU/Server/AdminAI/AIRequestQueue.cs" Link="Server/AIRequestQueue.cs" />
+    <Compile Include="../../Content.CMU/Server/AdminAI/AIResourceGovernor.cs" Link="Server/AIResourceGovernor.cs" />
+    <Compile Include="../../Content.CMU/Server/AdminAI/LinuxAIPressureReader.cs" Link="Server/LinuxAIPressureReader.cs" />
+    <Compile Include="../../Content.IntegrationTests/_CMU14/AdminAI/AIInfrastructureTests.cs" Link="Tests/AIInfrastructureTests.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(AdminAIEngineAssemblyDirectory)' != ''">
     <!-- Optional: compile/test CVar bindings against existing engine binaries without rebuilding the engine. -->

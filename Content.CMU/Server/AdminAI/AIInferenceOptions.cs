@@ -43,6 +43,7 @@ public sealed record AIInferenceOptions(
         return IsValid()
             && request.CorrelationId != Guid.Empty
             && !string.IsNullOrWhiteSpace(request.Input)
-            && request.Input.Length <= MaxInputChars;
+            && request.Input.Length <= MaxInputChars
+            && (request.OutputTokenLimit == null || request.OutputTokenLimit is >= 1 and <= 512);
     }
 }

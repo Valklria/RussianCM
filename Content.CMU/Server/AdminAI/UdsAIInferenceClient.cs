@@ -96,7 +96,7 @@ public sealed class UdsAIInferenceClient : IAIInferenceClient, IDisposable
         if (!_options.Enabled)
             return Failure(AIInferenceStatus.Disabled);
         if (!_options.Accepts(request))
-            return Failure(AIInferenceStatus.InvalidResponse);
+            return Failure(AIInferenceStatus.InvalidRequest);
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));

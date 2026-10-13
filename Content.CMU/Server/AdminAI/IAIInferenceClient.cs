@@ -14,7 +14,7 @@ public interface IAIInferenceClient
     Task<AIInferenceResult> InferAsync(AIInferenceRequest request, CancellationToken cancellationToken);
 }
 
-public sealed record AIInferenceRequest(Guid CorrelationId, string Input);
+public sealed record AIInferenceRequest(Guid CorrelationId, string Input, int? OutputTokenLimit = null);
 
 public enum AIInferenceStatus : byte
 {
@@ -24,6 +24,11 @@ public enum AIInferenceStatus : byte
     Cancelled,
     InvalidResponse,
     Success,
+    QueueFull,
+    Duplicate,
+    Expired,
+    Paused,
+    InvalidRequest,
 }
 
 public enum AIWorkerHealth : byte

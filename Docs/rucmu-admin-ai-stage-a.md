@@ -332,7 +332,7 @@ Tools/AdminAI.Tests/UdsSpikeTests.cs
 Docs/rucmu-admin-ai-stage-a.md
 ```
 
-## Что ещё требуется для приёмки A и перехода к B
+## Что ещё требуется для Linux-приёмки A
 
 1. На Linux проверить сборку с штатно подготовленными зависимостями. На Windows
    Content.Shared и Content.Server уже собраны с сохранением бинарников движка;
@@ -342,8 +342,10 @@ Docs/rucmu-admin-ai-stage-a.md
    sandbox зафиксировать ошибку и остановиться; не отключать его проверку.
 3. Повторить подтверждённые на Windows отказ/таймаут/отмену/обрыв и перезапуск
    mock-worker на Linux. Скрипт `Tools/AdminAI.Spike/linux-smoke.sh` подготовлен.
-4. Затем последовательно выполнять B (systemd, ресурсные лимиты, bounded queue,
-   governor), C (DraftOnly и права), D (логи и доказательства).
+4. По последующей команде пользователя продолжена подготовка B в отдельной
+   ветке `codex/rucmu-admin-ai-stage-b`: см. `Docs/rucmu-admin-ai-stage-b.md`.
+   Это не подтверждает Linux-приёмку A или возможность production-развёртывания.
+   C (DraftOnly и права), D (логи и доказательства) остаются следующими этапами.
    Этап E требует отдельного ручного принятия предыдущих.
 
 Нагрузка RuCMU + 3 Squad, Linux PSI/cgroups, лицензия/hash GGUF, качество

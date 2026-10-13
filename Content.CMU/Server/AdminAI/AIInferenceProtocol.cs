@@ -21,7 +21,7 @@ public static class AIInferenceProtocol
                 new { role = "user", content = request.Input },
             },
             stream = false,
-            max_tokens = options.MaxOutputTokens,
+            max_tokens = Math.Min(options.MaxOutputTokens, request.OutputTokenLimit ?? options.MaxOutputTokens),
         });
     }
 

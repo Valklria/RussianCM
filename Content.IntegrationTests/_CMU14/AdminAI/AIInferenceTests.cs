@@ -83,6 +83,7 @@ public sealed class AIInferenceTests
         foreach (var request in new[]
         {
             new AIInferenceRequest(Guid.Empty, "ok"), new(CorrelationId, "12345"), new(CorrelationId, "   "),
+            new(CorrelationId, "ok", 0), new(CorrelationId, "ok", 513),
         })
             Assert.Throws<ArgumentException>(() => AIInferenceProtocol.SerializeRequest(request, options));
     }
@@ -104,6 +105,16 @@ public sealed class AIInferenceTests
             Assert.That(root.GetProperty("stream").GetBoolean(), Is.False);
             Assert.That(root.GetProperty("max_tokens").GetInt32(), Is.EqualTo(256));
         });
+    }
+
+    [TestCase(64, 256, 64)]
+    [TestCase(512, 256, 256)]
+    [TestCase(64, 32, 32)]
+    public void RequestBudgetCannotRaiseServerCap(int requested, int serverCap, int expected)
+    {
+        using var document = JsonDocument.Parse(AIInferenceProtocol.SerializeRequest(new(CorrelationId, "synthetic", requested),
+            new(MaxOutputTokens: serverCap)));
+        Assert.That(document.RootElement.GetProperty("max_tokens").GetInt32(), Is.EqualTo(expected));
     }
 
     [TestCase("")]
