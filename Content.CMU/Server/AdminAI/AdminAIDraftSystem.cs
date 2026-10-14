@@ -42,8 +42,8 @@ public sealed class AdminAHelpDeliveredEvent(AdminAHelpAcceptedEvent message) : 
     public readonly AdminAHelpAcceptedEvent Message = message;
 }
 
-/// <summary>Manual private draft only. No logs/notes, player replies, commands, webhook or disciplinary APIs.</summary>
-public sealed class AdminAIDraftSystem : EntitySystem
+/// <summary>Private drafts and manually requested evidence reports. No disciplinary APIs or automatic draft publication.</summary>
+public sealed partial class AdminAIDraftSystem : EntitySystem
 {
     private const string RateKey = "AdminAIManualDraft";
     [Dependency] private IAdminManager _admins = default!;
@@ -76,6 +76,7 @@ public sealed class AdminAIDraftSystem : EntitySystem
         base.Initialize();
         SubscribeLocalEvent<AdminAHelpAcceptedEvent>(Accepted);
         SubscribeNetworkEvent<AdminAIDraftRequest>(Requested);
+        SubscribeNetworkEvent<AdminAIContextRequest>((message, args) => HandleContext(message, args.SenderSession));
         SubscribeLocalEvent<RoundRestartCleanupEvent>(_ => Reset());
         SubscribeLocalEvent<GameRunLevelChangedEvent>(_ => Reset());
         InitializeCoordinator();
@@ -84,7 +85,7 @@ public sealed class AdminAIDraftSystem : EntitySystem
     internal void InitializeCoordinator()
     {
         _audit = LogManager.GetSawmill("cmu.admin_ai.audit");
-        _store = new(AdminAICVars.ReadContext(_config));
+        _store = CreateStore();
         _admins.OnPermsChanged += PermissionsChanged;
         _players.PlayerStatusChanged += SessionChanged;
         _prototypes.PrototypesReloaded += PrototypesChanged;
@@ -99,6 +100,23 @@ public sealed class AdminAIDraftSystem : EntitySystem
     }
 
     private bool Enabled => _config.GetCVar(AdminAICVars.Enabled) && AdminAICVars.ReadContext(_config).IsValid();
+    private AIDraftSessionStore CreateStore()
+    {
+        var store = new AIDraftSessionStore(AdminAICVars.ReadContext(_config));
+        // Capacity/TTL eviction must revoke the already delivered client view as well as the server ticket.
+        store.ViewRemoved += view =>
+        {
+            try
+            {
+                if (!_shuttingDown && _players.TryGetSessionById(new(view.Owner), out var session)
+                    && session.Status != SessionStatus.Disconnected && Authorized(session))
+                    Deliver(session, new(new(view.Channel), view.SelectionId, Guid.Empty, view.CaseId, Guid.Empty,
+                        AdminAIDraftStatus.Stale, "", Array.Empty<AdminAISource>(), "", 0));
+            }
+            catch (Exception) { _audit.Warning("AI view eviction delivery failed; ordinary ahelp remains available."); }
+        };
+        return store;
+    }
     private bool Authorized(ICommonSession session) => _admins.HasAdminFlag(session, AdminFlags.Adminhelp);
     internal void Accepted(AdminAHelpAcceptedEvent message)
     {
@@ -194,6 +212,8 @@ public sealed class AdminAIDraftSystem : EntitySystem
             ? AdminAIDraftText.Sanitize(result.UntrustedText ?? "") : "";
         var status = result.CorrelationId != ticket.Id || result.Status == AIInferenceStatus.Success && draft.Length == 0
             ? AIInferenceStatus.InvalidResponse : result.Status;
+        if (_inference.Snapshot().State == AIResourceState.Paused)
+        { status = AIInferenceStatus.Paused; draft = ""; }
         var view = _store.Complete(ticket, _round.CurrentRoundId, _timing.RealTime, true, status, draft);
         _audit.Info($"AI completed actor={current.UserId} case={ticket.CaseId} round={ticket.Round} request={ticket.Id} result={status} current={view != null} sources={string.Join(',', sources.Select(source => source.GuideId))}");
         if (view == null) return;
@@ -237,6 +257,7 @@ public sealed class AdminAIDraftSystem : EntitySystem
         if (!Enabled || _shuttingDown) return null;
         EnsureKnowledge(); return _knowledge;
     }
+    internal Guid? GetPublicCaseId(Guid channel) => _store.CaseId(channel, _round.CurrentRoundId, _timing.RealTime);
 
     private void Send(ICommonSession session, AIDraftSessionStore.View view, AdminAIDraftStatus? status = null)
     {
@@ -248,7 +269,9 @@ public sealed class AdminAIDraftSystem : EntitySystem
         var sources = view.Sources.Select(source => new AdminAISource(source.GuideId, source.Title, source.Version, source.Fragment)).ToArray();
         Deliver(session, new AdminAIDraftState(new(view.Channel), view.SelectionId, view.Id, view.CaseId, view.Pending?.Id ?? Guid.Empty,
             status.Value, view.Draft, sources, $"{snapshot.State}/{snapshot.Health}", snapshot.Queue?.Pending ?? 0,
-            view.Draft.Length > 0 ? Math.Max(0, (int)(view.DraftExpires - _timing.RealTime).TotalSeconds) : 0));
+            view.Draft.Length > 0 ? Math.Max(0, (int)(view.DraftExpires - _timing.RealTime).TotalSeconds) : 0,
+            CanInvestigate(session), view.Round));
+        SendCase(session, view);
     }
     private void SendEmpty(ICommonSession session, AdminAIDraftRequest message, AdminAIDraftStatus status)
         => Deliver(session, new AdminAIDraftState(message.Channel, message.SelectionId, Guid.Empty, Guid.Empty, Guid.Empty,
@@ -277,7 +300,7 @@ public sealed class AdminAIDraftSystem : EntitySystem
     }
     private void Reconfigure()
     {
-        Volatile.Write(ref _dirty, false); Reset(); _store = new(AdminAICVars.ReadContext(_config));
+        Volatile.Write(ref _dirty, false); Reset(); _store = CreateStore();
         _knowledgeGeneration++; _knowledge = null;
     }
     public override void Update(float frameTime)
@@ -290,7 +313,8 @@ public sealed class AdminAIDraftSystem : EntitySystem
         foreach (var owner in owners)
         {
             if (!_players.TryGetSessionById(new(owner), out var session)) { _store.Revoke(owner); continue; }
-            if (_store.Peek(owner) is { } view) Send(session, view); else SendReset(session);
+            if (_store.Peek(owner) is { } view) Send(session, view);
+            // ViewRemoved already sent a scoped stale state; a global reset could erase a newly selected channel.
         }
     }
     public override void Shutdown()

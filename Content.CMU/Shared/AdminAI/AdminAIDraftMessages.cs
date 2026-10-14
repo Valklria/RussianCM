@@ -51,12 +51,16 @@ public sealed class AdminAIDraftState : EntityEventArgs
     public readonly string WorkerState;
     public readonly int Pending;
     public readonly int DraftSeconds;
+    public readonly bool CanInvestigate;
+    public readonly int Round;
     public AdminAIDraftState(NetUserId channel, Guid selectionId, Guid viewId, Guid caseId, Guid requestId,
-        AdminAIDraftStatus status, string draft, AdminAISource[] sources, string workerState, int pending, int draftSeconds = 0)
+        AdminAIDraftStatus status, string draft, AdminAISource[] sources, string workerState, int pending, int draftSeconds = 0,
+        bool canInvestigate = false, int round = 0)
     {
         Channel = channel; SelectionId = selectionId; ViewId = viewId; CaseId = caseId; RequestId = requestId;
         Status = status; Draft = draft; Sources = sources; WorkerState = workerState; Pending = pending;
         DraftSeconds = draftSeconds;
+        CanInvestigate = canInvestigate; Round = round;
     }
 }
 

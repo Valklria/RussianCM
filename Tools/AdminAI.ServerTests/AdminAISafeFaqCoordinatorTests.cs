@@ -13,6 +13,7 @@ using Robust.Shared.ContentPack;
 using Robust.Shared.Enums;
 using Robust.Shared.Player;
 using Robust.Shared.Network;
+using Robust.Shared.Localization;
 using Robust.Shared.Prototypes;
 using Robust.Shared.Utility;
 using Robust.UnitTesting;
@@ -35,6 +36,8 @@ public sealed class AdminAISafeFaqCoordinatorTests
     [TestCase("dispute")]
     [TestCase("no-source")]
     [TestCase("admin-only")]
+    [TestCase("clarification")]
+    [TestCase("clarification-admin-arrives")]
     public async Task CompiledHandlerOnlyDeliversEligiblePublicFaqWithoutCallingModel(string scenario)
     {
         var engine = Environment.GetEnvironmentVariable("RUCMU_AI_ENGINE_RESOURCES")!;
@@ -65,11 +68,15 @@ public sealed class AdminAISafeFaqCoordinatorTests
         {
             await server.WaitAssertion(() =>
             {
+                var loc = server.ResolveDependency<ILocalizationManager>();
+                var culture = System.Globalization.CultureInfo.GetCultureInfo("ru-RU", predefinedOnly: false);
+                loc.LoadCulture(culture); loc.DefaultCulture = culture;
                 var deps = server.InstanceDependencyCollection.FromParent(server.InstanceDependencyCollection);
                 config = server.ResolveDependency<IConfigurationManager>();
                 foreach (var cvar in AdminAICVars.RuntimeBools) config.RegisterCVar(cvar.Name, cvar.DefaultValue, cvar.Flags);
                 config.SetCVar(AdminAICVars.Enabled, true);
                 config.SetCVar(AdminAICVars.SafeFAQ, scenario != "disabled");
+                config.SetCVar(AdminAICVars.Clarification, scenario.StartsWith("clarification"));
                 var admins = Substitute.For<IAdminManager>();
                 admins.AllAdmins.Returns(_ => adminPresent ? new[] { session } : Array.Empty<ICommonSession>());
                 var players = Substitute.For<IPlayerManager>();
@@ -83,9 +90,10 @@ public sealed class AdminAISafeFaqCoordinatorTests
                 deps.RegisterInstance<IAdminAIRoundContext>(new PublicRound()); deps.BuildGraph();
                 coordinator = new AdminAISafeFaqSystem(); deps.InjectDependencies(coordinator);
                 coordinator.KnowledgeLookup = () => knowledge;
+                coordinator.CaseLookup = _ => Guid.Parse("8ce00000-0000-0000-0000-000000000007");
                 coordinator.ReplyDelivery = (target, text) => { Assert.That(target, Is.SameAs(session)); replies.Add(text); };
                 coordinator.InitializeCoordinator();
-                var question = scenario == "map" ? "На какой карте мы сейчас играем?" : scenario == "dispute"
+                var question = scenario.StartsWith("clarification") ? "Меня убили" : scenario == "map" ? "На какой карте мы сейчас играем?" : scenario == "dispute"
                     ? "Как пользоваться радио? Меня убили" : scenario == "no-source" ? "Как зарядить квантовый вомбат?" : "Как пользоваться радио?";
                 coordinator.Accepted(new(session.UserId.UserId, 7, false, question, scenario == "admin-only"));
             });
@@ -93,15 +101,15 @@ public sealed class AdminAISafeFaqCoordinatorTests
             for (var index = 0; index < 40 && callbacks.IsEmpty; index++) await Task.Delay(10);
             await server.WaitAssertion(() =>
             {
-                if (scenario == "admin-arrives") adminPresent = true;
+                if (scenario is "admin-arrives" or "clarification-admin-arrives") adminPresent = true;
                 if (scenario == "reconnected") current = replacement;
                 if (scenario == "config-disabled") config!.SetCVar(AdminAICVars.SafeFAQ, false);
                 if (scenario == "new-input") coordinator!.Accepted(new(session.UserId.UserId, 7, false, "Новое обращение", false));
                 while (callbacks.TryDequeue(out var callback)) callback();
-                if (scenario is "normal" or "map")
+                if (scenario is "normal" or "map" or "clarification")
                 {
                     Assert.That(replies, Has.Count.EqualTo(1));
-                    Assert.That(replies[0], scenario == "map" ? Does.Contain("LV-624") : Does.Contain(":h"));
+                    Assert.That(replies[0], scenario == "map" ? Does.Contain("LV-624") : scenario == "clarification" ? Does.Contain("место") : Does.Contain(":h"));
                 }
                 else Assert.That(replies, Is.Empty, scenario);
                 Assert.That(service.Calls, Is.Zero, "Automatic replies must never publish unchecked model output.");

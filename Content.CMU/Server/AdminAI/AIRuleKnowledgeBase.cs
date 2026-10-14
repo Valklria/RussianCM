@@ -32,6 +32,8 @@ public sealed class AIRuleKnowledgeBase
     private static readonly string[] Endings = { "иями", "ями", "ами", "ого", "ему", "ение", "ения", "ать", "ять", "ить", "ться", "ется", "ются", "ете", "ите", "ов", "ев", "ая", "яя", "ый", "ий", "ой", "ые", "ие", "ом", "ем", "ах", "ях", "ам", "ям", "ей", "ою", "ею", "ит", "ет", "ат", "ут", "а", "я", "ы", "и", "у", "ю", "е", "ь" };
     private readonly Entry[] _entries;
     private readonly Dictionary<string, int> _frequency = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Posting[]> _postings = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, AIRulePassage[]> _documents = new(StringComparer.Ordinal);
     public int Count => _entries.Length;
     public int Documents { get; }
 
@@ -78,20 +80,42 @@ public sealed class AIRuleKnowledgeBase
         Documents = accepted; _entries = entries.ToArray();
         foreach (var entry in _entries)
             foreach (var term in entry.Terms) _frequency[term] = _frequency.GetValueOrDefault(term) + 1;
+        var postings = new Dictionary<string, List<Posting>>(StringComparer.Ordinal);
+        for (var index = 0; index < _entries.Length; index++)
+            foreach (var term in _entries[index].Terms)
+            {
+                if (!postings.TryGetValue(term, out var list)) postings[term] = list = new();
+                var weight = Math.Log(1 + (double)(_entries.Length + 1) / (_frequency[term] + 1));
+                list.Add(new(index, weight * (_entries[index].Heading.Contains(term) ? 1.5 : 1)));
+            }
+        foreach (var pair in postings) _postings[pair.Key] = pair.Value.ToArray();
+        foreach (var group in _entries.GroupBy(entry => entry.Passage.GuideId, StringComparer.Ordinal))
+            _documents[group.Key] = group.Select(entry => entry.Passage).ToArray();
     }
 
     public AIRulePassage[] Search(string query, int maxChars = 1500)
     {
         if (maxChars < 100) return Array.Empty<AIRulePassage>();
         var tokens = Tokenize(query.Length > 4096 ? query[..4096] : query);
-        var ranked = _entries.Select(entry => (entry.Passage, Score: Score(entry, tokens)))
-            .Where(row => row.Score > 0).OrderByDescending(row => row.Score)
-            .ThenBy(row => row.Passage.GuideId, StringComparer.Ordinal).Take(3);
+        var scores = new Dictionary<int, double>();
+        foreach (var token in tokens)
+            if (_postings.TryGetValue(token, out var postings))
+                foreach (var posting in postings) scores[posting.Index] = scores.GetValueOrDefault(posting.Index) + posting.Weight;
+        var ranked = new List<(int Index, double Score)>(3);
+        foreach (var candidate in scores)
+        {
+            var position = 0;
+            while (position < ranked.Count && Compare(candidate.Key, candidate.Value, ranked[position].Index, ranked[position].Score) >= 0) position++;
+            if (position >= 3) continue;
+            ranked.Insert(position, (candidate.Key, candidate.Value));
+            if (ranked.Count > 3) ranked.RemoveAt(3);
+        }
         var results = new List<AIRulePassage>(); var length = 0;
         foreach (var row in ranked)
         {
-            if (length + row.Passage.Fragment.Length > maxChars) continue;
-            results.Add(row.Passage); length += row.Passage.Fragment.Length;
+            var passage = _entries[row.Index].Passage;
+            if (length + passage.Fragment.Length > maxChars) continue;
+            results.Add(passage); length += passage.Fragment.Length;
         }
         return results.ToArray();
     }
@@ -105,21 +129,18 @@ public sealed class AIRuleKnowledgeBase
             && frequency <= Math.Max(32, Count / 12));
     }
 
-    public AIRulePassage[] Browse(string guideId, string section, int limit = 3) => _entries
-        .Where(entry => entry.Passage.GuideId == guideId && entry.Passage.Section == section)
-        .Take(Math.Clamp(limit, 1, 3)).Select(entry => entry.Passage).ToArray();
+    public AIRulePassage[] Browse(string guideId, string section, int limit = 3) => _documents.TryGetValue(guideId, out var passages)
+        ? passages.Where(passage => passage.Section == section).Take(Math.Clamp(limit, 1, 3)).ToArray() : Array.Empty<AIRulePassage>();
 
-    public AIRulePassage? FindPublishedLine(string guideId, string phrase) => _entries
-        .FirstOrDefault(entry => entry.Passage.GuideId == guideId && entry.Passage.Fragment.Contains(phrase, StringComparison.Ordinal))?.Passage;
+    public AIRulePassage? FindPublishedLine(string guideId, string phrase) => _documents.TryGetValue(guideId, out var passages)
+        ? passages.FirstOrDefault(passage => passage.Fragment.Contains(phrase, StringComparison.Ordinal)) : null;
 
-    private double Score(Entry entry, HashSet<string> tokens)
+    private int Compare(int left, double leftScore, int right, double rightScore)
     {
-        double score = 0;
-        foreach (var term in tokens)
-            if (entry.Terms.Contains(term))
-                score += Math.Log(1 + (double)(_entries.Length + 1) / (_frequency.GetValueOrDefault(term) + 1))
-                    * (entry.Heading.Contains(term) ? 1.5 : 1);
-        return score;
+        var score = rightScore.CompareTo(leftScore);
+        if (score != 0) return score;
+        var guide = StringComparer.Ordinal.Compare(_entries[left].Passage.GuideId, _entries[right].Passage.GuideId);
+        return guide != 0 ? guide : left.CompareTo(right);
     }
 
     public static bool IsAllowedPath(string path) => path.Length <= 256 && !path.Contains("..", StringComparison.Ordinal)
@@ -173,6 +194,7 @@ public sealed class AIRuleKnowledgeBase
         return word;
     }
     private sealed record Entry(AIRulePassage Passage, HashSet<string> Terms, HashSet<string> Heading);
+    private readonly record struct Posting(int Index, double Weight);
 }
 
 public static class AIDraftPrompt

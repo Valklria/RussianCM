@@ -6,7 +6,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Content.Server.Administration.Managers;
-using Content.Server.CMU14.AdminAI;
+using Content.Server.CMU14.AdminAI; // CMU14
 using Content.Server.Afk;
 using Content.Server.Database;
 using Content.Server.Discord;
@@ -775,7 +775,7 @@ namespace Content.Server.Administration.Systems
                 _messageQueues[message.UserId].Enqueue(GenerateAHelpMessage(messageParams));
             }
 
-            // Automatic FAQ runs only after ordinary delivery/relay preparation, never instead of it.
+            // CMU14: automatic FAQ runs only after ordinary delivery/relay preparation, never instead of it.
             RaiseLocalEvent(new AdminAHelpDeliveredEvent(accepted));
 
             if (admins.Count != 0 || sendsWebhook)

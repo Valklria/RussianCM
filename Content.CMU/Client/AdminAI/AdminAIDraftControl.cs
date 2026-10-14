@@ -31,10 +31,12 @@ public sealed partial class AdminAIDraftControl : BoxContainer
     private readonly TextEdit _editor = new() { SetHeight = 100, HorizontalExpand = true, Name = "ai-editor" };
     private readonly BoxContainer _body = new() { Orientation = LayoutOrientation.Vertical, Visible = false, Name = "ai-body" };
     private readonly BoxContainer _sources = new() { Orientation = LayoutOrientation.Vertical, Visible = false };
+    private readonly TabContainer _tabs = new();
     private NetUserId? _channel;
     private Guid _selection, _view;
     private bool _hasDraft;
     private string _lastServerDraft = "";
+    private AdminAISource[] _lastSources = Array.Empty<AdminAISource>();
     private TimeSpan _expiresAt;
     public event Action<string>? InsertDraft;
     public event Action<AdminAIDraftRequest>? RequestDraft;
@@ -50,12 +52,16 @@ public sealed partial class AdminAIDraftControl : BoxContainer
         _sourceToggle.Text = Loc.GetString("cmu-admin-ai-draft-sources");
         AddChild(_expand); AddChild(_body);
         _body.AddChild(new Label { Text = Loc.GetString("cmu-admin-ai-draft-private"), ClipText = true });
-        _body.AddChild(_status); _body.AddChild(_worker); _body.AddChild(_editor);
+        _body.AddChild(_status); _body.AddChild(_worker); _body.AddChild(_tabs);
+        var draft = new BoxContainer { Orientation = LayoutOrientation.Vertical };
+        _tabs.AddChild(draft); _tabs.SetTabTitle(0, Loc.GetString("cmu-admin-ai-tab-draft"));
+        draft.AddChild(_editor);
         var actions = new BoxContainer { Orientation = LayoutOrientation.Horizontal, HorizontalExpand = true };
         foreach (var button in new[] { _prepare, _cancel, _insert, _sourceToggle }) actions.AddChild(button);
-        _body.AddChild(actions);
+        draft.AddChild(actions);
         var scroll = new ScrollContainer { SetHeight = 110, HorizontalExpand = true, Visible = false };
-        scroll.AddChild(_sources); _body.AddChild(scroll);
+        scroll.AddChild(_sources); draft.AddChild(scroll);
+        InitializeCases();
         _expand.OnToggled += args => SetExpanded(args.Pressed);
         _prepare.OnPressed += _ => Send(AdminAIDraftAction.Prepare);
         _cancel.OnPressed += _ => Send(AdminAIDraftAction.Cancel);
@@ -91,6 +97,9 @@ public sealed partial class AdminAIDraftControl : BoxContainer
     {
         if (_channel != state.Channel || _selection != state.SelectionId) return;
         _view = state.ViewId;
+        _caseRound = state.Round; _tabs.SetTabVisible(1, state.CanInvestigate);
+        _collect.Disabled = !state.CanInvestigate || _view == Guid.Empty || state.Status == AdminAIDraftStatus.Working;
+        if (!state.CanInvestigate) ClearCase();
         var isDraft = state.Draft.Length > 0 && state.DraftSeconds > 0 && state.Status is not (AdminAIDraftStatus.Disabled or AdminAIDraftStatus.Denied or AdminAIDraftStatus.Stale or AdminAIDraftStatus.NoConversation);
         _expiresAt = _timing.RealTime + TimeSpan.FromSeconds(Math.Clamp(state.DraftSeconds, 0, 300));
         _status.Text = Loc.GetString("cmu-admin-ai-draft-status-" + state.Status.ToString().ToLowerInvariant());
@@ -109,6 +118,9 @@ public sealed partial class AdminAIDraftControl : BoxContainer
             or AdminAIDraftStatus.Disabled or AdminAIDraftStatus.Denied;
         _cancel.Disabled = state.Status != AdminAIDraftStatus.Working;
         _sourceToggle.Disabled = state.Sources.Length == 0;
+        if (_lastSources.Select(source => (source.GuideId, source.Title, source.Version, source.Fragment))
+            .SequenceEqual(state.Sources.Select(source => (source.GuideId, source.Title, source.Version, source.Fragment)))) return;
+        _lastSources = state.Sources;
         _sources.RemoveAllChildren();
         foreach (var source in state.Sources.Take(3))
         {
@@ -136,10 +148,14 @@ public sealed partial class AdminAIDraftControl : BoxContainer
         _status.Text = Loc.GetString("cmu-admin-ai-draft-status-noconversation"); _worker.Text = "";
         _prepare.Disabled = true; _insert.Disabled = true; _cancel.Disabled = true; _sourceToggle.Disabled = true;
         _sources.RemoveAllChildren();
+        _lastSources = Array.Empty<AdminAISource>();
+        _collect.Disabled = true; _tabs.SetTabVisible(1, false);
+        ClearCase();
     }
     protected override void FrameUpdate(FrameEventArgs args)
     {
         base.FrameUpdate(args);
         if (_hasDraft && _timing.RealTime >= _expiresAt) Clear();
+        if (_caseReport != Guid.Empty && _timing.RealTime >= _caseExpiresAt) ClearCase();
     }
 }

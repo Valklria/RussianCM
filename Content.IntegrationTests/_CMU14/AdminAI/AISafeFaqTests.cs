@@ -118,7 +118,7 @@ public sealed class AISafeFaqTests
     [Test]
     public void WholePublishedCorpusIncludesExamplesAndReportsLookupLatency()
     {
-        var root = Environment.CurrentDirectory;
+        var root = AdminAITestPaths.Repository();
         var documents = Directory.EnumerateFiles(Path.Combine(root, "Content.CMU", "Resources", "Prototypes"), "*.yml", SearchOption.AllDirectories)
             .Concat(Directory.EnumerateFiles(Path.Combine(root, "Resources", "Prototypes", "_RuCM"), "*.yml", SearchOption.AllDirectories))
             .SelectMany(path => File.ReadAllText(path).Split("- type: guideEntry", StringSplitOptions.None).Skip(1))
@@ -150,7 +150,7 @@ public sealed class AISafeFaqTests
 
     private static AIRuleKnowledgeBase ActualKnowledge()
     {
-        var root = Path.Combine(Environment.CurrentDirectory, "Content.CMU", "Resources");
+        var root = Path.Combine(AdminAITestPaths.Repository(), "Content.CMU", "Resources");
         var documents = new[]
         {
             ("CMUGuideMedicalInfantry", "Medical/CMUMedicalInfantry.xml"),

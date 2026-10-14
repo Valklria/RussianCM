@@ -25,6 +25,13 @@ namespace Content.IntegrationTests.CMU14.AdminAI;
 [TestFixture, NonParallelizable, Category("LocalIPC")]
 public sealed class AdminAIClientUiTests
 {
+    [OneTimeSetUp]
+    public void RequireLocalFixtureResources()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("RUCMU_AI_ENGINE_RESOURCES"))
+            || string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("RUCMU_AI_CONTENT_RESOURCES")))
+            Assert.Ignore("Set the documented local engine/content resource paths to run the isolated UI fixture.");
+    }
     [Test]
     public void WorkspaceIsInsideChatColumnAndHorizontalSplitKeepsTwoChildren()
     {
@@ -135,7 +142,7 @@ public sealed class AdminAIClientUiTests
             control.Receive(new(old.Channel, old.SelectionId, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
                 AdminAIDraftStatus.Draft, "private old draft", [], "Normal/Ready", 0, 120));
             control.InsertCurrentDraft(); Assert.That(inserted, Is.Zero);
-            Assert.That(Rope.Collapse(Descendants(control).OfType<TextEdit>().Single().TextRope), Is.Empty);
+            Assert.That(Rope.Collapse(Descendants(control).OfType<TextEdit>().Single(editor => editor.Name == "ai-editor").TextRope), Is.Empty);
         });
     }
 
@@ -184,5 +191,76 @@ public sealed class AdminAIClientUiTests
         using var client = StartClient(); await client.WaitIdleAsync();
         await client.CheckSandboxed(typeof(AdminAIDraftState).Assembly);
         await client.CheckSandboxed(typeof(AdminAIDraftControl).Assembly);
+    }
+
+    [Test]
+    public async Task EvidenceIsReadonlyCannotInsertAndIsClearedOnSelectionAndPermissionReset()
+    {
+        using var client = StartClient(); await client.WaitIdleAsync();
+        await client.WaitAssertion(() =>
+        {
+            Culture(client, "ru-RU"); var control = new AdminAIDraftControl();
+            AdminAIDraftRequest? opened = null; control.RequestDraft += request => opened = request;
+            control.Select(new(Guid.NewGuid())); var selection = opened!; var view = Guid.NewGuid();
+            control.Receive(new(selection.Channel, selection.SelectionId, view, Guid.NewGuid(), Guid.Empty,
+                AdminAIDraftStatus.Ready, "", [], "Normal/Ready", 0, 0, true, 7));
+            var inserted = 0; control.InsertDraft += _ => inserted++;
+            control.ReceiveCase(new(selection.Channel, selection.SelectionId, view, Guid.NewGuid(), "ready", "private report",
+                [new(7, 42, DateTime.UtcNow.Ticks, "Chat", "private log")], 120));
+            var report = Descendants(control).OfType<TextEdit>().Single(editor => editor.Name == "ai-report");
+            Assert.That(report.Editable, Is.False); Assert.That(Rope.Collapse(report.TextRope), Is.EqualTo("private report"));
+            control.InsertCurrentDraft(); Assert.That(inserted, Is.Zero);
+            control.Reset(); Assert.That(Rope.Collapse(report.TextRope), Is.Empty);
+            Assert.That(Descendants(control).OfType<Button>().Single(button => button.Name == "ai-collect").Disabled, Is.True);
+            control.ReceiveCase(new(selection.Channel, selection.SelectionId, view, Guid.NewGuid(), "ready", "late report", [], 120));
+            Assert.That(Rope.Collapse(report.TextRope), Is.Empty);
+        });
+    }
+
+    [TestCase("ru-RU")]
+    [TestCase("en-US")]
+    public async Task ExpandedContextKeepsBoundedHeightInMinimumChatWidth(string culture)
+    {
+        using var client = StartClient(); await client.WaitIdleAsync();
+        await client.WaitAssertion(() =>
+        {
+            Culture(client, culture); var control = new AdminAIDraftControl();
+            client.ResolveDependency<IUserInterfaceManager>().StateRoot.AddChild(control);
+            try
+            {
+                AdminAIDraftRequest? opened = null; control.RequestDraft += request => opened = request;
+                control.Select(new(Guid.NewGuid())); var view = Guid.NewGuid();
+                control.Receive(new(opened!.Channel, opened.SelectionId, view, Guid.NewGuid(), Guid.Empty,
+                    AdminAIDraftStatus.Ready, "", [], "Normal/Ready", 0, 0, true, 7));
+                control.SetExpanded(true); Descendants(control).OfType<TabContainer>().Single().CurrentTab = 1;
+                control.ReceiveCase(new(opened.Channel, opened.SelectionId, view, Guid.NewGuid(), "ready", new string('я', 3000),
+                    Enumerable.Range(0, 64).Select(id => new AdminAIEvidence(7, id, DateTime.UtcNow.Ticks, "Damaged", "actual row")).ToArray(), 120));
+                var size = new Vector2(360, 360); control.Measure(size); control.Arrange(new UIBox2(Vector2.Zero, size));
+                Assert.That(control.DesiredSize.Y, Is.LessThanOrEqualTo(360), "Long evidence must scroll, rather than displace the existing ahelp composer.");
+                var collect = Descendants(control).OfType<Button>().Single(button => button.Name == "ai-collect");
+                Assert.That(collect.Width, Is.LessThanOrEqualTo(360)); Assert.That(collect.Disabled, Is.False);
+            }
+            finally { control.Orphan(); }
+        });
+    }
+
+    [Test]
+    public async Task LateEvictionOfReopenedChannelCannotEraseTheNewSelection()
+    {
+        using var client = StartClient(); await client.WaitIdleAsync();
+        await client.WaitAssertion(() =>
+        {
+            Culture(client, "ru-RU"); var control = new AdminAIDraftControl(); var requests = new List<AdminAIDraftRequest>();
+            control.RequestDraft += requests.Add; var channel = new NetUserId(Guid.NewGuid()); control.Select(channel);
+            var old = requests.Last(); control.Receive(new(channel, old.SelectionId, Guid.NewGuid(), Guid.NewGuid(), Guid.Empty,
+                AdminAIDraftStatus.Ready, "", [], "Normal/Ready", 0));
+            control.Select(channel); var current = requests.Last();
+            control.Receive(new(channel, current.SelectionId, Guid.NewGuid(), Guid.NewGuid(), Guid.Empty,
+                AdminAIDraftStatus.Draft, "new current draft", [], "Normal/Ready", 0, 120));
+            control.Receive(new(channel, old.SelectionId, Guid.Empty, Guid.NewGuid(), Guid.Empty,
+                AdminAIDraftStatus.Stale, "", [], "", 0));
+            string? inserted = null; control.InsertDraft += text => inserted = text; control.InsertCurrentDraft();
+            Assert.That(inserted, Is.EqualTo("new current draft"));
+        });
     }
 }

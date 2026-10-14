@@ -22,13 +22,15 @@ mkdir -p "$root/local-ai-data"
 cd "$root"
 echo 'LOCAL TEST: port 1213, independent data, auth disabled, hub advertisement disabled.'
 echo 'Use listplayers, then promotehost with the actual administrator name (duplicates get a suffix).'
-echo 'Private drafts are manual; public FAQ is enabled only for this local test, with no administrators online.'
+echo 'Private drafts/context are manual; public FAQ and neutral clarification are enabled only for this local test, with no administrators online.'
 exec "$dotnet" "$root/bin/Content.Server/Content.Server.dll" \
   --config-file "$root/local-ai-config.toml" --data-dir "$root/local-ai-data" \
   --cvar net.port=1213 --cvar net.bindto=127.0.0.1 --cvar net.upnp=false \
   --cvar auth.mode=2 --cvar hub.advertise=false --cvar status.enabled=false --cvar console.loginlocal=false \
   --cvar config.preset_development=false --cvar config.preset_debug=false \
   --cvar game.hostname=RuCMU-Local-AI-Test --cvar game.lobbyduration=86400 \
+  --cvar tts.enabled=false \
   --cvar cmu.admin_ai.enabled=true --cvar cmu.admin_ai.governor_enabled=true \
   --cvar cmu.admin_ai.safe_faq=true \
+  --cvar cmu.admin_ai.clarification=true --cvar cmu.admin_ai.investigation=true \
   --cvar cmu.admin_ai.socket_path=/run/rucmu-ai/llama.sock

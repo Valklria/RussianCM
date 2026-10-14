@@ -73,8 +73,8 @@ public sealed class AdminAIService : IAdminAIService
         _meter.CreateObservableGauge("cmu_admin_ai_tick_boundary_budget_ratio", () => Snapshot().Load?.SimulationBudgetRatio ?? double.NaN);
         _boolChanged = _ => Volatile.Write(ref _dirty, true); _intChanged = _ => Volatile.Write(ref _dirty, true);
         _floatChanged = _ => Volatile.Write(ref _dirty, true); _stringChanged = _ => Volatile.Write(ref _dirty, true);
-        foreach (var cvar in AdminAICVars.RuntimeBools) _config.OnValueChanged(cvar, _boolChanged);
-        foreach (var cvar in AdminAICVars.RuntimeInts) _config.OnValueChanged(cvar, _intChanged);
+        foreach (var cvar in AdminAICVars.InfrastructureBools) _config.OnValueChanged(cvar, _boolChanged);
+        foreach (var cvar in AdminAICVars.InfrastructureInts) _config.OnValueChanged(cvar, _intChanged);
         foreach (var cvar in AdminAICVars.RuntimeFloats) _config.OnValueChanged(cvar, _floatChanged);
         foreach (var cvar in AdminAICVars.RuntimeStrings) _config.OnValueChanged(cvar, _stringChanged);
     }
@@ -258,8 +258,8 @@ public sealed class AdminAIService : IAdminAIService
     {
         if (!_initialized || _shutdown) return;
         _shutdown = true;
-        foreach (var cvar in AdminAICVars.RuntimeBools) _config.UnsubValueChanged(cvar, _boolChanged);
-        foreach (var cvar in AdminAICVars.RuntimeInts) _config.UnsubValueChanged(cvar, _intChanged);
+        foreach (var cvar in AdminAICVars.InfrastructureBools) _config.UnsubValueChanged(cvar, _boolChanged);
+        foreach (var cvar in AdminAICVars.InfrastructureInts) _config.UnsubValueChanged(cvar, _intChanged);
         foreach (var cvar in AdminAICVars.RuntimeFloats) _config.UnsubValueChanged(cvar, _floatChanged);
         foreach (var cvar in AdminAICVars.RuntimeStrings) _config.UnsubValueChanged(cvar, _stringChanged);
         Stop();

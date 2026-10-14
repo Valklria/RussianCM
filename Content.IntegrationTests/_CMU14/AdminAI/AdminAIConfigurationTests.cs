@@ -13,6 +13,8 @@ public sealed class AdminAIConfigurationTests
     {
         Assert.That(AdminAICVars.Enabled.DefaultValue, Is.False);
         Assert.That(AdminAICVars.SafeFAQ.DefaultValue, Is.False);
+        Assert.That(AdminAICVars.Clarification.DefaultValue, Is.False);
+        Assert.That(AdminAICVars.Investigation.DefaultValue, Is.False);
         Assert.That(AdminAICVars.DraftOutputTokens.DefaultValue, Is.EqualTo(128));
         Assert.That(AdminAICVars.GovernorEnabled.DefaultValue, Is.True);
         Assert.That(AdminAICVars.MaxConcurrentRequests.DefaultValue, Is.EqualTo(1));

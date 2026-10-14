@@ -23,6 +23,7 @@
     <!-- Real compiled Content.Server and engine; no linked copies of the transport implementation. -->
     <Reference Include="Content.Server"><HintPath>$(AdminAIContentServerDirectory)/Content.Server.dll</HintPath></Reference>
     <Reference Include="Content.Shared"><HintPath>$(AdminAIContentServerDirectory)/Content.Shared.dll</HintPath></Reference>
+    <Reference Include="Content.Shared.Database"><HintPath>$(AdminAIContentServerDirectory)/Content.Shared.Database.dll</HintPath></Reference>
     <Reference Include="Robust.Shared"><HintPath>$(AdminAIEngineAssemblyDirectory)/Robust.Shared.dll</HintPath></Reference>
     <Reference Include="Robust.Shared.Maths"><HintPath>$(AdminAIEngineAssemblyDirectory)/Robust.Shared.Maths.dll</HintPath></Reference>
     <Reference Include="Robust.Server"><HintPath>$(AdminAIEngineAssemblyDirectory)/Robust.Server.dll</HintPath></Reference>

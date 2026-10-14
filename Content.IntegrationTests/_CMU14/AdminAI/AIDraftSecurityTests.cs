@@ -186,4 +186,18 @@ public sealed class AIDraftSecurityTests
         Assert.That(text, Does.Contain("plain"));
         Assert.That(AdminAIDraftText.Sanitize(new string('a', 4097)), Is.Empty);
     }
+
+    [Test]
+    public void CapacityEvictionNotifiesTheExactRemovedViewAndInvalidatesItsTicket()
+    {
+        var store = new AIDraftSessionStore(new(MaxConversations: 1)); var player = Guid.NewGuid(); var owner = Guid.NewGuid();
+        store.Accept(player, 7, false, "Первое обращение", false, TimeSpan.Zero);
+        var view = store.Open(owner, player, Guid.NewGuid(), 7, TimeSpan.Zero, true)!;
+        var ticket = store.Begin(view, TimeSpan.Zero, 800)!;
+        AIDraftSessionStore.View? removed = null; store.ViewRemoved += value => removed = value;
+        store.Accept(Guid.NewGuid(), 7, false, "Другое обращение", false, TimeSpan.FromSeconds(1));
+        Assert.That(removed, Is.SameAs(view)); Assert.That(removed!.SelectionId, Is.EqualTo(view.SelectionId));
+        Assert.That(store.Peek(owner), Is.Null);
+        Assert.That(store.Complete(ticket, 7, TimeSpan.FromSeconds(1), true, AIInferenceStatus.Success, "late draft"), Is.Null);
+    }
 }

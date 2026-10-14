@@ -61,4 +61,13 @@ public static class AIResponsePolicy
 
     public static bool IsMapQuestion(string question) => question.Trim().TrimEnd('?', '.', '!').ToLowerInvariant()
         is "на какой карте мы сейчас играем" or "какая сейчас карта" or "какая карта" or "на какой карте играем";
+
+    public static bool NeedsClarification(string question)
+    {
+        if (question.Length is < 1 or > 512) return false;
+        var text = question.ToLowerInvariant();
+        return text.Contains("убили", StringComparison.Ordinal) || text.Contains("убил", StringComparison.Ordinal)
+            || text.Contains("рдм", StringComparison.Ordinal) || text.Contains("жалоб", StringComparison.Ordinal)
+            || text.Contains("забанили", StringComparison.Ordinal) || text.Contains("злоупотреб", StringComparison.Ordinal);
+    }
 }

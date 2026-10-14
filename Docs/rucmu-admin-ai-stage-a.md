@@ -1,5 +1,7 @@
 # RuCMU AI Admin Assistant: аудит и этап A
 
+> Исторический протокол этапа. Актуальная поставка и ограничения: [инструкция релиза](rucmu-admin-ai-release.md).
+
 Дата проверки: 2026-10-13. Репозиторий `flex5hybrid/RussianCM`, база
 `origin/master` = `70bb8f196b1`, ветка `codex/rucmu-admin-ai-stage-a`.
 

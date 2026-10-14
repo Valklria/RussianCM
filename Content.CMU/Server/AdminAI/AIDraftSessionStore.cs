@@ -19,6 +19,7 @@ public sealed record AIDraftTicket(Guid Id, Guid Owner, Guid Channel, Guid CaseI
     int Round, long Revision, long Epoch, string Conversation, CancellationToken Token)
 {
     public string Question { get; init; } = "";
+    public DateTime ComplaintUtc { get; init; }
 }
 
 /// <summary>Game-thread-owned, bounded current-round public ahelp context and one private view per admin.</summary>
@@ -28,9 +29,15 @@ public sealed class AIDraftSessionStore(AIDraftContextOptions options)
     private readonly Dictionary<Guid, View> _views = new();
     private readonly Dictionary<Guid, TimeSpan> _prepareAfter = new();
     private long _epoch;
+    public event Action<View>? ViewRemoved;
     public IEnumerable<Guid> Owners => _views.Keys.ToArray();
     public int ConversationCount => _conversations.Count;
     public View? Peek(Guid owner) => _views.GetValueOrDefault(owner);
+    public Guid? CaseId(Guid channel, int round, TimeSpan now)
+    {
+        Sweep(now);
+        return _conversations.TryGetValue(channel, out var conversation) && conversation.Round == round ? conversation.Id : null;
+    }
 
     public void Accept(Guid channel, int round, bool fromAdmin, string text, bool adminOnly, TimeSpan now)
     {
@@ -50,6 +57,7 @@ public sealed class AIDraftSessionStore(AIDraftContextOptions options)
         {
             var bounded = text.Length > options.MessageChars ? text[..options.MessageChars] : text;
             conversation.Messages.Enqueue(new(Guid.NewGuid(), fromAdmin, bounded));
+            if (!fromAdmin) conversation.ComplaintUtc = DateTime.UtcNow;
             while (conversation.Messages.Count > options.MaxMessages) conversation.Messages.Dequeue();
         }
         foreach (var view in _views.Values.Where(v => v.Channel == channel))
@@ -101,7 +109,7 @@ public sealed class AIDraftSessionStore(AIDraftContextOptions options)
         view.Cancellation = new();
         view.Pending = new(Guid.NewGuid(), view.Owner, view.Channel, view.CaseId, view.Id, view.Round,
             conversation.Revision, _epoch, text.ToString(), view.Cancellation.Token)
-        { Question = conversation.Messages.LastOrDefault(message => !message.FromAdmin)?.Text ?? "" };
+        { Question = conversation.Messages.LastOrDefault(message => !message.FromAdmin)?.Text ?? "", ComplaintUtc = conversation.ComplaintUtc };
         return view.Pending;
     }
 
@@ -127,7 +135,10 @@ public sealed class AIDraftSessionStore(AIDraftContextOptions options)
 
     public void Cancel(View view) => Retire(view);
     public void Revoke(Guid owner)
-    { if (_views.Remove(owner, out var view)) Retire(view); }
+    {
+        if (!_views.Remove(owner, out var view)) return;
+        Retire(view); ViewRemoved?.Invoke(view);
+    }
     public void Reset()
     {
         _epoch++;
@@ -141,7 +152,10 @@ public sealed class AIDraftSessionStore(AIDraftContextOptions options)
         foreach (var channel in _conversations.Where(pair => now - pair.Value.LastActivity >= TimeSpan.FromSeconds(options.ContextTtlSeconds))
                      .Select(pair => pair.Key).ToArray()) RemoveConversation(channel);
         foreach (var view in _views.Values)
+        {
             if (view.Draft.Length > 0 && now >= view.DraftExpires) Retire(view);
+            if (view.Report != null && now >= view.ReportExpires) view.Report = null;
+        }
     }
 
     private void RemoveConversation(Guid channel)
@@ -153,6 +167,7 @@ public sealed class AIDraftSessionStore(AIDraftContextOptions options)
     {
         var cancellation = view.Cancellation;
         view.Cancellation = null; view.Pending = null; view.Draft = ""; view.Sources = Array.Empty<AIRulePassage>(); view.LastResult = null;
+        view.Report = null;
         if (cancellation != null) _ = Task.Run(() => { try { cancellation.Cancel(); } catch (AggregateException) { } finally { cancellation.Dispose(); } });
     }
 
@@ -162,6 +177,7 @@ public sealed class AIDraftSessionStore(AIDraftContextOptions options)
         public readonly int Round = round;
         public long Revision;
         public TimeSpan LastActivity = now;
+        public DateTime ComplaintUtc;
         public readonly Queue<AcceptedMessage> Messages = new();
     }
     private sealed record AcceptedMessage(Guid Id, bool FromAdmin, string Text);
@@ -178,5 +194,9 @@ public sealed class AIDraftSessionStore(AIDraftContextOptions options)
         public string Draft = "";
         public AIInferenceStatus? LastResult;
         public AIRulePassage[] Sources = Array.Empty<AIRulePassage>();
+        public AICaseReport? Report;
+        public Guid ReportId;
+        public Guid LastSentReport;
+        public TimeSpan ReportExpires;
     }
 }

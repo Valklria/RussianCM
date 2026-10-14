@@ -26,6 +26,11 @@ public static class AdminAICVars
 
     private const CVar Flags = CVar.SERVERONLY | CVar.ARCHIVE;
     public static readonly CVarDef<bool> SafeFAQ = CVarDef.Create("cmu.admin_ai.safe_faq", false, Flags);
+    public static readonly CVarDef<bool> Clarification = CVarDef.Create("cmu.admin_ai.clarification", false, Flags);
+    public static readonly CVarDef<bool> Investigation = CVarDef.Create("cmu.admin_ai.investigation", false, Flags);
+    public static readonly CVarDef<int> ContextMaxLogs = CVarDef.Create("cmu.admin_ai.context_max_logs", 64, Flags);
+    public static readonly CVarDef<int> EvidenceMaxChars = CVarDef.Create("cmu.admin_ai.evidence_max_chars", 24000, Flags);
+    public static readonly CVarDef<int> ContextWindowMinutes = CVarDef.Create("cmu.admin_ai.context_window_minutes", 15, Flags);
     public static readonly CVarDef<int> DraftOutputTokens = CVarDef.Create("cmu.admin_ai.draft_output_tokens", 128, Flags);
     public static readonly CVarDef<int> MaxConcurrentRequests = CVarDef.Create("cmu.admin_ai.max_concurrent_requests", 1, Flags);
     public static readonly CVarDef<int> QueueCapacity = CVarDef.Create("cmu.admin_ai.queue_capacity", 8, Flags);
@@ -53,11 +58,16 @@ public static class AdminAICVars
     public static readonly CVarDef<int> ContextMessageChars = CVarDef.Create("cmu.admin_ai.context_message_chars", 512, Flags);
     public static readonly CVarDef<int> DraftCooldownSeconds = CVarDef.Create("cmu.admin_ai.draft_cooldown_seconds", 5, Flags);
 
-    public static readonly CVarDef<bool>[] RuntimeBools = { Enabled, GovernorEnabled, SafeFAQ };
+    public static readonly CVarDef<bool>[] RuntimeBools = { Enabled, GovernorEnabled, SafeFAQ, Clarification, Investigation };
+    public static readonly CVarDef<bool>[] InfrastructureBools = { Enabled, GovernorEnabled };
+    public static readonly CVarDef<int>[] InfrastructureInts = { TimeoutSeconds, MaxInputChars, MaxOutputTokens, MaxOutputChars,
+        MaxConcurrentRequests, QueueCapacity, QueueTtlSeconds, DegradedInputChars, DegradedOutputTokens,
+        PollSeconds, RecoverySeconds, MaxSampleAgeSeconds };
     public static readonly CVarDef<int>[] RuntimeInts = { TimeoutSeconds, MaxInputChars, MaxOutputTokens, MaxOutputChars,
         MaxConcurrentRequests, QueueCapacity, QueueTtlSeconds, DegradedInputChars, DegradedOutputTokens,
         PollSeconds, RecoverySeconds, MaxSampleAgeSeconds, ContextTtlSeconds, DraftTtlSeconds, MaxConversations,
-        MaxViews, ContextMessages, ContextMessageChars, DraftCooldownSeconds, DraftOutputTokens };
+        MaxViews, ContextMessages, ContextMessageChars, DraftCooldownSeconds, DraftOutputTokens,
+        ContextMaxLogs, EvidenceMaxChars, ContextWindowMinutes };
     public static readonly CVarDef<float>[] RuntimeFloats = { CpuDegraded, CpuPaused, MemoryDegraded, MemoryPaused,
         IoDegraded, IoPaused, SimulationDegraded, SimulationPaused };
     public static readonly CVarDef<string>[] RuntimeStrings = { SocketPath, CgroupPaths };
