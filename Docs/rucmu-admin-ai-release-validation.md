@@ -13,6 +13,7 @@
 | Compiled Content.Server: handler permissions, private delivery, FAQ, clarification, bounded DB | 33 / 0 / 0 |
 | Те же compiled серверные тесты с Linux DLL, Ubuntu | 33 / 0 / 0 |
 | Compiled Client UI: вставка, expiry, новая выборка, readonly evidence, sandbox | 14 / 0 / 0 |
+| Повторный прогон штатного Content.IntegrationTests по namespace AdminAI | 135 / 0 / 0, 4 min 21 s; пересекается с focused тестами |
 | Content.Shared, Windows | 0 errors / 18 warnings |
 | Content.Server, Windows | 0 errors / 67 warnings |
 | Content.Client, Windows, штатная XAML-компиляция | 0 errors / 53 warnings |
@@ -88,6 +89,8 @@ Focused runner команды и параметры DLL/resource paths опис�
 .codex-build/admin-ai/release-server-nunit.xml
 .codex-build/admin-ai/release-client-{build,tests,tests-build}.log
 .codex-build/admin-ai/release-client-nunit.xml
+.codex-build/admin-ai/release-full-integration-tests.log
+.codex-build/admin-ai/full-integration-results/admin-ai-release.trx
 .codex-build/admin-ai/release-linux-{shared,server}-build.log
 .codex-build/admin-ai/stage-wsl/server-linux-{tests.log,nunit.xml}
 .codex-build/admin-ai/release-real-model-smoke.log
