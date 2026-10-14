@@ -19,7 +19,7 @@ version=$(timeout 10 "$binary" --version 2>&1)
 version=${version%%$'\n'*}
 [[ $version == "$LLAMA_SERVER_VERSION" ]] || fail 'binary version mismatch'
 help=$(timeout 10 "$binary" --help 2>&1)
-for option in --parallel --host --offline --no-webui --no-agent --log-disable --no-kv-offload --poll-batch; do
+for option in --parallel --host --offline --no-webui --no-agent --log-disable --no-kv-offload --poll-batch --batch-size --ubatch-size --cache-type-k --cache-type-v; do
     [[ $help == *"$option"* ]] || fail "required option unavailable: $option"
 done
 [[ $help == *'.sock'* ]] || fail 'UDS host support not advertised by pinned binary'
