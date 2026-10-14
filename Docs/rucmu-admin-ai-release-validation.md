@@ -21,9 +21,9 @@
 | Новый обычный headless Windows-клиент → обновлённый WSL Linux-сервер | InGame, serializer/transfer handshake completed |
 | Штатный sandbox этого настоящего клиента | Client, Shared, Shared.Database verified |
 | Реальный сервер после подключения | 259 документов / 5728 фрагментов, worker Ready, governor Normal |
-| Настоящая модель, production UDS-клиент, фиксированный синтетический запрос | Ready / Success, 3,57 s |
+| Настоящая модель, итоговый worker, production UDS-клиент | Ready / Success, первый запрос 12,07 s, прогретый 4,89 s |
 | Worker при этом запросе | CPU quota 1 CPU, RAM max 4 GiB, AF_UNIX only, PrivateNetwork yes, NRestarts 0 |
-| Memory events до/после запроса | high/max/oom/oom_kill не увеличились; oom и oom_kill = 0 |
+| Memory events до/после итогового запроса | high/max/oom/oom_kill = 0; наблюдаемая память 2,42 GB |
 | Source diff и status подмодулей | RobustToolbox и RSI.NET без изменений |
 
 **178 различных автоматических тестов**, 33 серверных дополнительно повторены
@@ -37,6 +37,18 @@ Warnings включают существующие API, предупрежден
 зависимостей и проверки sandbox не менялись. При подключении тестового клиента
 обнаружен существующий `TTS API token is empty`; TTS выключен только в локальном
 тестовом запуске, настройки production и код TTS не изменены.
+
+После первой проверки CI исправлены отсутствующие явные импорты `System.IO`/
+`System.Threading` в linked mock fixture и синхронный доступ к `Task.Result` в
+smoke очереди. Штатный Content.IntegrationTests собран с теми же frozen DLL:
+0 errors / 89 warnings; 119 boundary-тестов повторены успешно. Зависимости
+восстановлены штатным restore; исходники движка не менялись.
+
+Дополнительный тест worker после перезапуска выявил 24,79 s и рост `memory.high`
+с 5981 до 67856. Ограничение batch/ubatch до 128 и q8 KV-кеш сохранили 4096 context,
+один CPU и лимиты 3/4 GiB, снизили наблюдаемую память с 3,22 до 2,42 GB. Итоговые
+первый/повторный запросы: 12,07/4,89 s, без high/max/oom событий. Это отдельные
+синтетические замеры; качество произвольных моделей и p95/p99 не установлены.
 
 ## Команды и артефакты
 
