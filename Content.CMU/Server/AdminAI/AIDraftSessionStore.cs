@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -19,6 +20,9 @@ public sealed record AIDraftTicket(Guid Id, Guid Owner, Guid Channel, Guid CaseI
     int Round, long Revision, long Epoch, string Conversation, CancellationToken Token)
 {
     public string Question { get; init; } = "";
+    public string[] PlayerMessages { get; init; } = Array.Empty<string>();
+    public bool HasHistory { get; init; }
+    public ImmutableArray<AIInferenceTurn> Dialogue { get; init; } = ImmutableArray<AIInferenceTurn>.Empty;
     public DateTime ComplaintUtc { get; init; }
 }
 
@@ -56,9 +60,11 @@ public sealed class AIDraftSessionStore(AIDraftContextOptions options)
         if (!adminOnly)
         {
             var bounded = text.Length > options.MessageChars ? text[..options.MessageChars] : text;
-            conversation.Messages.Enqueue(new(Guid.NewGuid(), fromAdmin, bounded));
+            conversation.Messages.Add(new(Guid.NewGuid(), fromAdmin, bounded));
             if (!fromAdmin) conversation.ComplaintUtc = DateTime.UtcNow;
-            while (conversation.Messages.Count > options.MaxMessages) conversation.Messages.Dequeue();
+            // Keep the opening player message and the newest turns within the same count limit.
+            while (conversation.Messages.Count > options.MaxMessages)
+                conversation.Messages.RemoveAt(options.MaxMessages > 1 ? 1 : 0);
         }
         foreach (var view in _views.Values.Where(v => v.Channel == channel))
         { Retire(view); view.Revision = conversation.Revision; }
@@ -94,22 +100,40 @@ public sealed class AIDraftSessionStore(AIDraftContextOptions options)
             || !_conversations.TryGetValue(view.Channel, out var conversation) || maxConversationChars < 64) return null;
         Retire(view); view.NextPrepare = now + TimeSpan.FromSeconds(options.CooldownSeconds);
         _prepareAfter[view.Owner] = view.NextPrepare;
+        static string Line(AcceptedMessage message) => $"{(message.FromAdmin ? "Администратор" : "Игрок")}: {message.Text}\n";
+        static AcceptedMessage Fit(AcceptedMessage message, int chars)
+            => message with { Text = message.Text[..Math.Min(message.Text.Length, chars - (message.FromAdmin ? 16 : 8))] };
+        var selected = new List<AcceptedMessage>();
         var text = new StringBuilder();
-        foreach (var message in conversation.Messages.Reverse())
+        if (conversation.Messages.Sum(message => Line(message).Length) <= maxConversationChars)
+            selected.AddRange(conversation.Messages);
+        else
         {
-            var line = $"{(message.FromAdmin ? "Администратор" : "Игрок")}: {message.Text}\n";
-            if (text.Length + line.Length > maxConversationChars)
+            var anchorChars = conversation.Messages.Count > 1 ? Math.Min(Line(conversation.Messages[0]).Length, maxConversationChars / 4) : 0;
+            var recentChars = maxConversationChars - anchorChars;
+            var used = 0;
+            foreach (var message in conversation.Messages.Skip(anchorChars > 0 ? 1 : 0).Reverse())
             {
-                if (text.Length == 0) text.Append(line.AsSpan(0, maxConversationChars));
-                break;
+                var length = Line(message).Length;
+                if (used + length > recentChars)
+                {
+                    if (selected.Count == 0) selected.Add(Fit(message, recentChars));
+                    break;
+                }
+                selected.Insert(0, message); used += length;
             }
-            text.Insert(0, line);
+            if (anchorChars > 0)
+                selected.Insert(0, Fit(conversation.Messages[0], anchorChars));
         }
+        foreach (var message in selected) text.Append(Line(message));
         if (text.Length == 0) return null;
         view.Cancellation = new();
         view.Pending = new(Guid.NewGuid(), view.Owner, view.Channel, view.CaseId, view.Id, view.Round,
             conversation.Revision, _epoch, text.ToString(), view.Cancellation.Token)
-        { Question = conversation.Messages.LastOrDefault(message => !message.FromAdmin)?.Text ?? "", ComplaintUtc = conversation.ComplaintUtc };
+        { Question = conversation.Messages.LastOrDefault(message => !message.FromAdmin)?.Text ?? "",
+            PlayerMessages = conversation.Messages.Where(message => !message.FromAdmin).Select(message => message.Text).ToArray(),
+            Dialogue = selected.Select(message => new AIInferenceTurn(message.FromAdmin, message.Text)).ToImmutableArray(),
+            HasHistory = conversation.Messages.Count > 1, ComplaintUtc = conversation.ComplaintUtc };
         return view.Pending;
     }
 
@@ -178,7 +202,7 @@ public sealed class AIDraftSessionStore(AIDraftContextOptions options)
         public long Revision;
         public TimeSpan LastActivity = now;
         public DateTime ComplaintUtc;
-        public readonly Queue<AcceptedMessage> Messages = new();
+        public readonly List<AcceptedMessage> Messages = new();
     }
     private sealed record AcceptedMessage(Guid Id, bool FromAdmin, string Text);
     public sealed class View(Guid owner, Guid channel, Guid selectionId, Guid caseId, int round, long revision, TimeSpan now)

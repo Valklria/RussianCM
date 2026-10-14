@@ -74,8 +74,8 @@ public sealed class AdminAIDraftCoordinatorTests
                 var prototypes = Substitute.For<IPrototypeManager>();
                 prototypes.EnumeratePrototypes<GuideEntryPrototype>().Returns(new[]
                 {
-                    new GuideEntryPrototype { Id = "AU14RulesGeneral", Name = "Общие правила",
-                        Text = new ResPath("/ServerInfo/Guidebook/CMU14/Rules/AU14GeneralRules.xml") },
+                    new GuideEntryPrototype { Id = "CMUGuideMedicalInfantry", Name = "Первая помощь пехотинца",
+                        Text = new ResPath("/ServerInfo/Guidebook/CMU14/Medical/CMUMedicalInfantry.xml") },
                 });
                 deps.RegisterInstance<IPrototypeManager>(prototypes);
                 deps.BuildGraph();
@@ -85,7 +85,9 @@ public sealed class AdminAIDraftCoordinatorTests
                 coordinator.StateDelivery = (target, state) => { Assert.That(target, Is.SameAs(session)); responses.Add(state); };
                 coordinator.ResetDelivery = target => { Assert.That(target, Is.SameAs(session)); resets++; };
                 coordinator.InitializeCoordinator();
-                coordinator.Accepted(new(player.UserId, 0, false, "Где опубликованы правила сервера?", false));
+                coordinator.Accepted(new(player.UserId, 0, false, "Как вылечить морпеха?", false));
+                coordinator.Accepted(new(player.UserId, 0, true, "Какой вид травмы?", false));
+                coordinator.Accepted(new(player.UserId, 0, false, "Я не знаю, я новичок", false));
                 coordinator.HandleRequest(new(player, Guid.NewGuid(), Guid.Empty, AdminAIDraftAction.Open), session);
                 Assert.That(responses, Is.Empty); Assert.That(resets, Is.EqualTo(1)); Assert.That(service.Calls, Is.Zero);
                 admin.Active = true;
@@ -107,7 +109,9 @@ public sealed class AdminAIDraftCoordinatorTests
                 });
             }
             var request = await service.Entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
-            Assert.That(request.Input, Does.Contain("Опубликованные локальные источники"));
+            Assert.That(request.Dialogue.Select(turn => turn.FromAdmin), Is.EqualTo(new[] { false, true, false }));
+            Assert.That(request.Dialogue[^1].Text, Is.EqualTo("Я не знаю, я новичок"));
+            Assert.That(request.Input, Does.Contain("Осмотреть ранения"));
             if (revokeBeforeCompletion) await server.WaitPost(() => admin.Active = false);
             service.Completed.TrySetResult(new(request.CorrelationId, AIInferenceStatus.Success, "[bold]Проверьте правила[/bold] https://evil.example"));
             for (var i = 0; i < 30; i++)

@@ -150,6 +150,42 @@ public sealed class AIDraftSecurityTests
     }
 
     [Test]
+    public void FollowUpKeepsPlayerQuestionAndAcceptedAdministratorReply()
+    {
+        var store = Store();
+        store.Accept(Player, 1, false, "Как вылечить морпеха?", false, TimeSpan.Zero);
+        store.Accept(Player, 1, true, "Какой вид травмы?", false, TimeSpan.Zero);
+        store.Accept(Player, 1, false, "Я не знаю, я новичок", false, TimeSpan.Zero);
+        var view = store.Open(Owner, Player, Selection, 1, TimeSpan.Zero, true)!;
+        var ticket = store.Begin(view, TimeSpan.Zero, 1200)!;
+        Assert.That(ticket.Conversation, Does.Contain("Как вылечить морпеха?").And.Contain("Администратор: Какой вид травмы?").And.Contain("Я не знаю, я новичок"));
+        Assert.That(ticket.Question, Is.EqualTo("Я не знаю, я новичок"));
+        Assert.That(ticket.PlayerMessages, Is.EqualTo(new[] { "Как вылечить морпеха?", "Я не знаю, я новичок" }));
+        Assert.That(ticket.HasHistory, Is.True);
+        var request = AIDraftPrompt.Request(ticket, [], 2300, 128)!;
+        Assert.That(request.Dialogue.Select(turn => turn.FromAdmin), Is.EqualTo(new[] { false, true, false }));
+        Assert.That(request.Dialogue[^1].Text, Is.EqualTo("Я не знаю, я новичок"));
+        Assert.That(request.Input, Does.Not.Contain("Администратор:").And.Not.Contain("Я не знаю"));
+    }
+
+    [Test]
+    public void MessageAndCharacterEvictionPreserveOpeningTopicAndLatestTurn()
+    {
+        var store = Store();
+        store.Accept(Player, 1, false, "Как вылечить морпеха?", false, TimeSpan.Zero);
+        for (var i = 0; i < 20; i++)
+            store.Accept(Player, 1, true, "Уточнение " + i + new string('a', 450), false, TimeSpan.Zero);
+        store.Accept(Player, 1, false, "Я не знаю, я новичок", false, TimeSpan.Zero);
+        var view = store.Open(Owner, Player, Selection, 1, TimeSpan.Zero, true)!;
+        var ticket = store.Begin(view, TimeSpan.Zero, 1200)!;
+        Assert.That(ticket.Conversation.Length, Is.LessThanOrEqualTo(1200));
+        Assert.That(ticket.Conversation, Does.StartWith("Игрок: Как вылечить морпеха?\n"));
+        Assert.That(ticket.Conversation, Does.EndWith("Игрок: Я не знаю, я новичок\n"));
+        Assert.That(ticket.Conversation, Does.Not.Contain("Уточнение 0"));
+        Assert.That(ticket.PlayerMessages, Has.Length.EqualTo(2));
+    }
+
+    [Test]
     public void KnowledgeSourcesAreActualExcerptsWithContentHash()
     {
         const string fragment = "Опубликованные правила запрещают метагейминг и разглашение информации текущего раунда.";

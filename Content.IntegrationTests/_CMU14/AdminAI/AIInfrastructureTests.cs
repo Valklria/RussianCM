@@ -190,6 +190,21 @@ public sealed class AIInfrastructureTests
     }
 
     [Test]
+    public async Task DialogueCannotBypassQueueAdmissionOrDegradedBudget()
+    {
+        var client = new ControlledClient();
+        await using var queue = Ready(client, new(MaxInputChars: 32, DegradedInputChars: 16));
+        var request = Request("sources") with { Dialogue = [new(false, new string('x', 26))] };
+        Assert.That((await queue.EnqueueAsync(request, AIRequestClass.LightManual, default)).Status,
+            Is.EqualTo(AIInferenceStatus.InvalidRequest));
+        queue.SetAvailability(AIResourceState.Degraded, AIWorkerHealth.Ready);
+        request = request with { Dialogue = [new(false, new string('x', 10))] };
+        Assert.That((await queue.EnqueueAsync(request, AIRequestClass.LightManual, default)).Status,
+            Is.EqualTo(AIInferenceStatus.Paused));
+        Assert.That(client.Calls, Is.Zero);
+    }
+
+    [Test]
     public async Task DisableIsPermanentEvenIfStaleHealthPollReportsReady()
     {
         var client = new ControlledClient(); var queue = Ready(client, new());

@@ -61,11 +61,10 @@ public sealed class AIRequestQueue : IAsyncDisposable
             Purge();
             AIInferenceStatus? refusal = token.IsCancellationRequested ? AIInferenceStatus.Cancelled
                 : _disabled ? AIInferenceStatus.Disabled
-                : request.CorrelationId == Guid.Empty || string.IsNullOrWhiteSpace(request.Input)
-                    || request.Input.Length > _options.MaxInputChars || !Enum.IsDefined(kind)
+                : request.CorrelationId == Guid.Empty || !request.IsInputValid(_options.MaxInputChars) || !Enum.IsDefined(kind)
                     || request.OutputTokenLimit is < 1 or > 512 ? AIInferenceStatus.InvalidRequest
                 : _health != AIWorkerHealth.Ready ? AIInferenceStatus.Unavailable
-                : !Allowed(kind, request.Input.Length) ? AIInferenceStatus.Paused
+                : !Allowed(kind, (int)request.InputChars) ? AIInferenceStatus.Paused
                 : _active?.Id == request.CorrelationId || _pending.Exists(j => j.Id == request.CorrelationId) ? AIInferenceStatus.Duplicate
                 : _pending.Count >= _options.Capacity ? AIInferenceStatus.QueueFull : null;
             if (refusal != null)
@@ -242,7 +241,7 @@ public sealed class AIRequestQueue : IAsyncDisposable
     private sealed class Job(AIInferenceRequest request, AIRequestClass kind, CancellationToken token, TimeSpan created)
     {
         public readonly Guid Id = request.CorrelationId;
-        public readonly int InputLength = request.Input.Length;
+        public readonly int InputLength = (int)request.InputChars;
         public AIInferenceRequest? Request = request;
         public readonly AIRequestClass Kind = kind;
         public readonly CancellationToken Token = token;

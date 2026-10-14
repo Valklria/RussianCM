@@ -71,6 +71,32 @@ public sealed class AISafeFaqTests
         Assert.That(AIRuleKnowledgeBase.IsGenericHelp("Привет помогите, меня убили"), Is.False);
     }
 
+    [TestCase("Я не знаю, я новичок")]
+    [TestCase("Не понял")]
+    [TestCase("Как это сделать?")]
+    public void PrivateDraftRetrievalUsesPreviousTopicForAnUnderspecifiedFollowUp(string followUp)
+    {
+        var ticket = new AIDraftTicket(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1, 1, 1, "", default)
+            { Question = followUp, PlayerMessages = ["Как вылечить морпеха?", followUp], HasHistory = true };
+        var sources = ActualKnowledge().SearchDraft(ticket, 1200);
+        Assert.That(sources, Is.Not.Empty);
+        Assert.That(sources.All(source => source.GuideId == "CMUGuideMedicalInfantry"), Is.True);
+        Assert.That(string.Join("\n", sources.Select(source => source.Fragment)), Does.Contain("Осмотреть ранения"));
+        Assert.That(AIResponsePolicy.FindAnswer(followUp, ActualKnowledge()), Is.Empty,
+            "Private history retrieval must not broaden the automatic FAQ policy.");
+    }
+
+    [Test]
+    public void NewTopicAndUnknownCaseDoNotInheritEarlierMedicalSources()
+    {
+        var ticket = new AIDraftTicket(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1, 1, 1, "", default)
+            { Question = "Как пользоваться радио?", PlayerMessages = ["Как вылечить морпеха?", "Как пользоваться радио?"] };
+        var knowledge = ActualKnowledge();
+        Assert.That(knowledge.SearchDraft(ticket, 1200).Any(source => source.GuideId == "CMUGuideMedicalInfantry"), Is.False);
+        Assert.That(knowledge.SearchDraft(ticket with { Question = "Я не знаю, я новичок", PlayerMessages = ["Я не знаю, я новичок"] }, 1200), Is.Empty);
+        Assert.That(knowledge.SearchDraft(ticket with { Question = "Как создать квантового вомбата?", PlayerMessages = ["Как создать квантового вомбата?"] }, 1200), Is.Empty);
+    }
+
     [Test]
     public void RussianInflectionAndMedicalAliasesMatchPublishedExcerpts()
     {

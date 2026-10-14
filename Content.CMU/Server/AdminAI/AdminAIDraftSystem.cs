@@ -172,7 +172,7 @@ public sealed partial class AdminAIDraftSystem : EntitySystem
         var outputTokens = _config.GetCVar(AdminAICVars.DraftOutputTokens);
         if (outputTokens is < 32 or > 256) { Send(session, view, AdminAIDraftStatus.Disabled); return; }
         var maxChars = Math.Min(2300, _config.GetCVar(infrastructure.State == AIResourceState.Degraded ? AdminAICVars.DegradedInputChars : AdminAICVars.MaxInputChars));
-        var ticket = _store.Begin(view, _timing.RealTime, Math.Min(800, maxChars - 650));
+        var ticket = _store.Begin(view, _timing.RealTime, Math.Min(1200, maxChars - 350));
         if (ticket == null) { Send(session, view, view.Pending == null ? AdminAIDraftStatus.RateLimited : AdminAIDraftStatus.Working); return; }
         var knowledge = _knowledge;
         var publicMap = AIResponsePolicy.IsMapQuestion(ticket.Question) ? _round.PublicMapDescription : null;
@@ -184,17 +184,16 @@ public sealed partial class AdminAIDraftSystem : EntitySystem
             try
             {
                 sources = AIResponsePolicy.FindAnswer(ticket.Question, knowledge);
-                if (publicMap != null || sources.Length > 0)
+                if (publicMap != null || sources.Length > 0 && !ticket.HasHistory)
                 {
                     // Fast public facts retain the same private view/authentication/revision checks.
                     result = new(ticket.Id, AIInferenceStatus.Success, publicMap ?? AIResponsePolicy.Excerpt(sources));
                 }
                 else
                 {
-                    sources = knowledge.Search(ticket.Question.Length > 0 ? ticket.Question : ticket.Conversation,
-                        maxChars - ticket.Conversation.Length - 650);
-                    var input = AIDraftPrompt.Build(ticket, sources, maxChars);
-                    if (input.Length > 0) result = await _inference.EnqueueAsync(new(ticket.Id, input, outputTokens), AIRequestClass.LightManual, ticket.Token).ConfigureAwait(false);
+                    sources = knowledge.SearchDraft(ticket, maxChars - ticket.Conversation.Length - 350);
+                    var request = AIDraftPrompt.Request(ticket, sources, maxChars, outputTokens);
+                    if (request != null) result = await _inference.EnqueueAsync(request, AIRequestClass.LightManual, ticket.Token).ConfigureAwait(false);
                 }
             }
             catch (Exception) { result = new(ticket.Id, AIInferenceStatus.Unavailable); }
