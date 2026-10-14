@@ -15,6 +15,8 @@ if ($Role -eq 'Admin') {
 }
 Push-Location $repoRoot
 try {
-    & dotnet $client --username $username --connect --connect-address "udp://${address}:1213"
+    # Local GPU inference shares the desktop adapter with these two test clients.
+    # Bound rendering and load textures on demand; use the stock client CVars.
+    & dotnet $client --username $username --connect --connect-address "udp://${address}:1213" --cvar display.max_fps=60 --cvar res.texturepreloadingenabled=false
     if ($LASTEXITCODE -ne 0) { throw "Client exited with code $LASTEXITCODE" }
 } finally { Pop-Location }

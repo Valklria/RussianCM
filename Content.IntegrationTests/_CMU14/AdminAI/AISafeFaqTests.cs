@@ -58,6 +58,19 @@ public sealed class AISafeFaqTests
         Assert.That(AIResponsePolicy.IsMapQuestion("На какой карте мы сейчас играем? Меня убили"), Is.False);
     }
 
+    [TestCase("Привет помогите")]
+    [TestCase("Здравствуйте, нужна помощь!")]
+    [TestCase("Помогите, пожалуйста")]
+    public void GenericHelpDoesNotBorrowLoreAsTheSubjectOfTheComplaint(string question)
+    {
+        var knowledge = ActualKnowledge();
+        Assert.That(AIRuleKnowledgeBase.IsGenericHelp(question), Is.True);
+        Assert.That(knowledge.Search(question), Is.Empty);
+        Assert.That(knowledge.Search("Как оказать первую помощь морпеху?"), Is.Not.Empty,
+            "Help is still a substantive word in an actual medical question.");
+        Assert.That(AIRuleKnowledgeBase.IsGenericHelp("Привет помогите, меня убили"), Is.False);
+    }
+
     [Test]
     public void RussianInflectionAndMedicalAliasesMatchPublishedExcerpts()
     {

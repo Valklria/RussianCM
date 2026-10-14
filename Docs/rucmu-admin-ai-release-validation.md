@@ -33,6 +33,19 @@
 автоответы/отчёты проверены compiled fixtures с управляемыми sessions/services/DB,
 не полным игровым сетевым E2E. Ручной обычный DraftOnly ранее принят пользователем.
 
+Дополнение после пользовательского timeout на «Привет помогите»: 3 новые
+регрессии поиска, boundary теперь 122/0/0; прежние 33 compiled server tests
+повторены успешно. Всего 181 различных тестов с учётом неизменённых ранее
+проверенных наборов. Windows/Linux Content.Server пересобраны: 0 errors / 67 warnings.
+GPU-генерация реальной модели на итоговом q8/512: две серии по 30/30 Success
+с двумя клиентами InGame, p95 0,60/0,62 s, max 0,61/0,66 s. Третья серия
+30/30 с почти максимальным штатным входом (3975/4096 символов): p95 0,69 s,
+max 0,80 s. Измерение модели + UDS не включает игровой handler/очередь/сеть/UI;
+ручной E2E нового GPU-профиля пока не подтверждён. Прежний FP16 с конкурирующей
+нагрузкой давал timeout 45 s и ответ 26,68 s; этот отрицательный результат
+сохранён. Условия и ограничения —
+[отдельный протокол](rucmu-admin-ai-gpu-wsl.md).
+
 Warnings включают существующие API, предупреждения анализаторов о будущих
 требованиях к Dependency-классам и уязвимости закреплённого ImageSharp. Версии
 зависимостей и проверки sandbox не менялись. При подключении тестового клиента
@@ -179,6 +192,7 @@ RSI.NET      3eead16bbade2214f4e0c4dd07a845051c24b075
 - `Content.Server/Administration/Systems/BwoinkSystem.cs`
 - `Content.Server/Entry/EntryPoint.cs`
 - `Content.Server/IoC/ServerContentIoC.cs`
+- `Docs/rucmu-admin-ai-gpu-wsl.md`
 - `Docs/rucmu-admin-ai-local-wsl.md`
 - `Docs/rucmu-admin-ai-release-validation.md`
 - `Docs/rucmu-admin-ai-release.md`
@@ -205,7 +219,10 @@ RSI.NET      3eead16bbade2214f4e0c4dd07a845051c24b075
 - `Tools/AdminAI.Tests/UdsSpikeTests.cs`
 - `deploy/linux/admin-ai.toml.example`
 - `deploy/linux/audit-game-placement.sh`
+- `deploy/linux/rucmu-ai-worker-cuda-wsl-test.service.example`
 - `deploy/linux/rucmu-ai-worker.service`
 - `deploy/linux/run-local-ai-test.sh`
+- `deploy/linux/worker-cuda-wsl-test-preflight.sh`
+- `deploy/linux/worker-cuda-wsl-test.env.example`
 - `deploy/linux/worker-preflight.sh`
 - `deploy/linux/worker.env.example`
