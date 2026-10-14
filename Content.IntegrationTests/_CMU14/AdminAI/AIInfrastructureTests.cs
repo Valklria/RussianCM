@@ -217,7 +217,8 @@ public sealed class AIInfrastructureTests
         var first = queue.EnqueueAsync(Request(), AIRequestClass.LightManual, default); await client.Next();
         var tasks = Enumerable.Range(0, 1000).Select(_ => queue.EnqueueAsync(Request(), AIRequestClass.LightManual, default)).ToArray();
         Assert.That(queue.Snapshot().Pending, Is.EqualTo(8));
-        Assert.That(tasks.Count(t => t.IsCompleted && t.Result.Status == AIInferenceStatus.QueueFull), Is.EqualTo(992));
+        var rejected = await Task.WhenAll(tasks.Where(t => t.IsCompleted));
+        Assert.That(rejected.Count(result => result.Status == AIInferenceStatus.QueueFull), Is.EqualTo(992));
         client.Release(); await first;
         for (var i = 0; i < 8; i++) { await client.Next(); client.Release(); }
         var results = await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(5));
